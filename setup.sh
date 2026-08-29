@@ -46,7 +46,7 @@ PACKAGES=(
 
     # -- apps (normie + picks) ---------------------------------------------------
     chromium dolphin dolphin-plugins ark ffmpegthumbnailer xdg-user-dirs
-    zathura zathura-pdf-mupdf foliate imv micro btop fastfetch
+    mpv zathura zathura-pdf-mupdf foliate imv micro btop fastfetch
     gnome-disk-utility gnome-system-monitor qbittorrent gnome-keyring
     # firefox
 
@@ -66,7 +66,7 @@ AUR_PACKAGES=(
     scenefx0.5                # scenefx 0.5 (AUR-only build dep of mangowm-git)
     mangowm-git               # the WM itself (rolling/development build)
     archlinux-themes-sddm     # archlinux-simplyblack + archlinux-soft-grey sddm themes
-    numix-circle-icon-theme-git  # Numix Circle icon theme (dolphin, gtk, qt)
+    mpv-mpris                 # MPRIS bridge so mangowm sees mpv as a media player
 )
 
 # ------------------------------------------------------------------------------
@@ -113,7 +113,7 @@ sudo pacman -Syu --noconfirm
 # ------------------------------------------------------------------------------
 if ! command -v yay >/dev/null 2>&1; then
     say "Building yay from AUR"
-    sudo pacman -S --noconfirm --needed base-devel git
+    sudo pacman -S --noconfirm --needed base-devel git go
     tmp="$(mktemp -d)"
     git clone --depth=1 https://aur.archlinux.org/yay.git "$tmp/yay"
     (cd "$tmp/yay" && makepkg -si --noconfirm --needed)
@@ -137,7 +137,8 @@ yay -S --noconfirm --needed "${AUR_PACKAGES[@]}"
 say "Deploying configs (backups in $HOME_BAK)"
 mkdir -p "$HOME_BAK" "$HOME/.config/mango/cfg" "$HOME/.config/noctalia" \
          "$HOME/.config/foot" "$HOME/.config/gtk-3.0" "$HOME/.config/gtk-4.0" \
-         "$HOME/.config/qt6ct" "$HOME/.config/xdg-desktop-portal" \
+         "$HOME/.config/qt6ct" "$HOME/.config/mpv" \
+         "$HOME/.config/xdg-desktop-portal" \
          "$HOME/.config/dolphinrc.d" 2>/dev/null || true
 
 backup() {   # backup <target-file>
@@ -328,7 +329,11 @@ cat > "$HOME/.config/mango/cfg/env.conf" <<'MANGO_ENV'
 # Set your environment variables here. | https://mangowm.github.io/docs/configuration/basics#environment-variables
 
 env = TERMINAL,foot
-env = QT_QPA_PLATFORMTHEME,qt6ct
+# QT_QPA_PLATFORMTHEME deliberately NOT set (commented, exactly like the source
+# box): shell-spawned and D-Bus/systemd-activated apps (e.g. dolphin --daemon
+# via FileManager1) then share the same Qt env and get identical styling from
+# kdeglobals' ColorScheme=Noctalia instead of splitting on QPA theme.
+# env = QT_QPA_PLATFORMTHEME,qt6ct
 # env = QT_QPA_PLATFORMTHEME_QT6,qt6ct
 MANGO_ENV
 
@@ -613,10 +618,11 @@ type = "dotnetrob/cat:cat"
 [widget.date]
 format = "{:%a %d %b -}"
 
-# Launcher applet icon: arch logo from the Numix-Circle theme (same trick the
-# source CachyOS box uses with org.cachyos.hello.svg).
+# Launcher applet icon: bundled round arch logo (written to
+# ~/.local/share/icons/arch-round.svg by the gtk/qt6ct/kde section below;
+# Numix-Circle is no longer part of the icon stack).
 [widget.launcher]
-custom_image = "/usr/share/icons/Numix-Circle/48/apps/archlinux.svg"
+custom_image = "/home/salva/.local/share/icons/arch-round.svg"
 scale = 1.45
 
 [widget.network]
@@ -645,7 +651,6 @@ backup "$HOME/.config/gtk-3.0/settings.ini"
 cat > "$HOME/.config/gtk-3.0/settings.ini" <<'GTK3'
 [Settings]
 gtk-theme-name=adw-gtk3
-gtk-icon-theme-name=Numix-Circle
 gtk-cursor-theme-name=capitaine-cursors-light
 gtk-cursor-theme-size=24
 gtk-application-prefer-dark-theme=1
@@ -657,183 +662,99 @@ for v in 3.0 4.0; do
 done
 
 backup "$HOME/.config/qt6ct/qt6ct.conf"
-# The rolling AUR noctalia regenerates ~/.local/share/color-schemes/noctalia.colors
-# with its own (purple) palette, unlike the CachyOS-built noctalia on the source
-# box (tan/orange) that dolphin must match. Ship the SOURCE palette under a
-# different filename so noctalia cannot clobber it, and point qt6ct at that.
-mkdir -p "$HOME/.local/share/color-schemes"
-backup "$HOME/.local/share/color-schemes/noctalia-classic.colors"
-cat > "$HOME/.local/share/color-schemes/noctalia-classic.colors" <<'NOCTALIA_CLASSIC'
-[KDE]
-contrast=4
-
-[General]
-ColorScheme=Noctalia
-Name=noctalia
-
-[ColorEffects:Disabled]
-Color=255,255,255
-ColorAmount=0
-ColorEffect=0
-ContrastAmount=0.65
-ContrastEffect=1
-IntensityAmount=0.1
-IntensityEffect=2
-
-[ColorEffects:Inactive]
-ChangeSelectionColor=true
-Color=226,226,226
-ColorAmount=0.025
-ColorEffect=2
-ContrastAmount=0.1
-ContrastEffect=2
-Enable=false
-IntensityAmount=0
-IntensityEffect=0
-
-[Colors:Button]
-BackgroundAlternate=243,243,243
-BackgroundNormal=232,232,232
-DecorationFocus=148,74,0
-DecorationHover=148,74,0
-ForegroundActive=148,74,0
-ForegroundInactive=71,71,71
-ForegroundLink=117,88,69
-ForegroundNegative=186,26,26
-ForegroundNeutral=95,97,53
-ForegroundNormal=27,27,27
-ForegroundPositive=95,97,53
-ForegroundVisited=91,65,47
-
-[Colors:Complementary]
-BackgroundAlternate=243,243,243
-BackgroundNormal=249,249,249
-DecorationFocus=148,74,0
-DecorationHover=148,74,0
-ForegroundActive=148,74,0
-ForegroundInactive=71,71,71
-ForegroundLink=117,88,69
-ForegroundNegative=186,26,26
-ForegroundNeutral=95,97,53
-ForegroundNormal=113,55,0
-ForegroundPositive=95,97,53
-ForegroundVisited=91,65,47
-
-[Colors:Header]
-BackgroundAlternate=249,249,249
-BackgroundNormal=238,238,238
-DecorationFocus=148,74,0
-DecorationHover=148,74,0
-ForegroundActive=148,74,0
-ForegroundInactive=71,71,71
-ForegroundLink=117,88,69
-ForegroundNegative=186,26,26
-ForegroundNeutral=95,97,53
-ForegroundNormal=27,27,27
-ForegroundPositive=95,97,53
-ForegroundVisited=91,65,47
-
-[Colors:Header][Inactive]
-BackgroundAlternate=238,238,238
-BackgroundNormal=249,249,249
-DecorationFocus=148,74,0
-DecorationHover=148,74,0
-ForegroundActive=148,74,0
-ForegroundInactive=71,71,71
-ForegroundLink=117,88,69
-ForegroundNegative=186,26,26
-ForegroundNeutral=95,97,53
-ForegroundNormal=27,27,27
-ForegroundPositive=95,97,53
-ForegroundVisited=91,65,47
-
-[Colors:Selection]
-BackgroundAlternate=243,243,243
-BackgroundNormal=148,74,0
-DecorationFocus=148,74,0
-DecorationHover=148,74,0
-ForegroundActive=255,255,255
-ForegroundInactive=71,71,71
-ForegroundLink=117,88,69
-ForegroundNegative=255,218,214
-ForegroundNeutral=228,230,174
-ForegroundNormal=255,255,255
-ForegroundPositive=228,230,174
-ForegroundVisited=91,65,47
-
-[Colors:Tooltip]
-BackgroundAlternate=249,249,249
-BackgroundNormal=238,238,238
-DecorationFocus=148,74,0
-DecorationHover=148,74,0
-ForegroundActive=148,74,0
-ForegroundInactive=71,71,71
-ForegroundLink=117,88,69
-ForegroundNegative=186,26,26
-ForegroundNeutral=95,97,53
-ForegroundNormal=27,27,27
-ForegroundPositive=95,97,53
-ForegroundVisited=91,65,47
-
-[Colors:View]
-BackgroundAlternate=238,238,238
-BackgroundNormal=249,249,249
-DecorationFocus=113,55,0
-DecorationHover=255,255,255
-ForegroundActive=148,74,0
-ForegroundInactive=71,71,71
-ForegroundLink=117,88,69
-ForegroundNegative=186,26,26
-ForegroundNeutral=95,97,53
-ForegroundNormal=27,27,27
-ForegroundPositive=95,97,53
-ForegroundVisited=91,65,47
-
-[Colors:Window]
-BackgroundAlternate=255,220,197
-BackgroundNormal=238,238,238
-DecorationFocus=148,74,0
-DecorationHover=148,74,0
-ForegroundActive=148,74,0
-ForegroundInactive=71,71,71
-ForegroundLink=117,88,69
-ForegroundNegative=186,26,26
-ForegroundNeutral=95,97,53
-ForegroundNormal=27,27,27
-ForegroundPositive=95,97,53
-ForegroundVisited=91,65,47
-
-[WM]
-activeBackground=255,220,197
-activeBlend=113,55,0
-activeForeground=113,55,0
-inactiveBackground=249,249,249
-inactiveBlend=71,71,71
-inactiveForeground=71,71,71
-NOCTALIA_CLASSIC
+# qt6ct is INSTALLED but deliberately INERT: no app runs with a
+# QT_QPA_PLATFORMTHEME env (mango env.conf leaves it commented, exactly like
+# the source box), so KDE/Qt apps style themselves natively from kdeglobals'
+# ColorScheme=Noctalia and every launch path looks the same. The file is kept
+# so the qt6ct GUI/KCM shows the source's settings if anyone enables it.
 cat > "$HOME/.config/qt6ct/qt6ct.conf" <<'QT6CT'
 [Appearance]
-color_scheme_path=~/.local/share/color-schemes/noctalia-classic.colors
+color_scheme_path=~/.local/share/color-schemes/noctalia.colors
 custom_palette=true
-icon_theme=Numix-Circle
+icon_theme=breeze
 standard_dialogs=default
 style=Breeze
 QT6CT
+
+# Launcher applet round Arch logo, bundled (no icon-theme dependency): the
+# official round arch logo, copied from Numix-Circle's
+# distributor-logo-archlinux.svg before we dropped that theme.
+mkdir -p "$HOME/.local/share/icons"
+backup "$HOME/.local/share/icons/arch-round.svg"
+cat > "$HOME/.local/share/icons/arch-round.svg" <<'ARCH_ROUND_SVG'
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+ <defs>
+  <linearGradient id="lG3764" x1="1" x2="47" gradientUnits="userSpaceOnUse" gradientTransform="matrix(0,-1,1,0,0,48)">
+   <stop style="stop-color:#1791d1"/>
+   <stop offset="1" style="stop-color:#19a0e3"/>
+  </linearGradient>
+ </defs>
+ <g>
+  <path d="m 36.31 5 c 5.859 4.062 9.688 10.831 9.688 18.5 c 0 12.426 -10.07 22.5 -22.5 22.5 c -7.669 0 -14.438 -3.828 -18.5 -9.688 c 1.037 1.822 2.306 3.499 3.781 4.969 c 4.085 3.712 9.514 5.969 15.469 5.969 c 12.703 0 23 -10.298 23 -23 c 0 -5.954 -2.256 -11.384 -5.969 -15.469 c -1.469 -1.475 -3.147 -2.744 -4.969 -3.781 z m 4.969 3.781 c 3.854 4.113 6.219 9.637 6.219 15.719 c 0 12.703 -10.297 23 -23 23 c -6.081 0 -11.606 -2.364 -15.719 -6.219 c 4.16 4.144 9.883 6.719 16.219 6.719 c 12.703 0 23 -10.298 23 -23 c 0 -6.335 -2.575 -12.06 -6.719 -16.219 z" style="opacity:0.05"/>
+  <path d="m 41.28 8.781 c 3.712 4.085 5.969 9.514 5.969 15.469 c 0 12.703 -10.297 23 -23 23 c -5.954 0 -11.384 -2.256 -15.469 -5.969 c 4.113 3.854 9.637 6.219 15.719 6.219 c 12.703 0 23 -10.298 23 -23 c 0 -6.081 -2.364 -11.606 -6.219 -15.719 z" style="opacity:0.1"/>
+  <path d="m 31.25 2.375 c 8.615 3.154 14.75 11.417 14.75 21.13 c 0 12.426 -10.07 22.5 -22.5 22.5 c -9.708 0 -17.971 -6.135 -21.12 -14.75 a 23 23 0 0 0 44.875 -7 a 23 23 0 0 0 -16 -21.875 z" style="opacity:0.2"/>
+ </g>
+ <g>
+  <path d="m 24 1 c 12.703 0 23 10.297 23 23 c 0 12.703 -10.297 23 -23 23 -12.703 0 -23 -10.297 -23 -23 0 -12.703 10.297 -23 23 -23 z" style="fill:url(#lG3764)"/>
+ </g>
+ <g>
+  <g>
+   <g transform="translate(1,1)">
+    <g style="opacity:0.1">
+     <!-- color: #19a0e3 -->
+     <g>
+      <path d="m 24 10 c -1.07 2.617 -1.715 4.332 -2.902 6.875 c 0.727 0.77 1.621 1.672 3.078 2.688 c -1.566 -0.641 -2.629 -1.289 -3.426 -1.957 c -1.523 3.176 -3.91 7.699 -8.75 16.395 c 3.805 -2.195 6.754 -3.551 9.504 -4.066 c -0.121 -0.508 -0.188 -1.055 -0.184 -1.629 l 0.004 -0.121 c 0.063 -2.438 1.328 -4.313 2.832 -4.184 c 1.5 0.125 2.668 2.207 2.609 4.645 c -0.012 0.457 -0.063 0.898 -0.156 1.309 c 2.719 0.531 5.637 1.887 9.391 4.055 c -0.738 -1.363 -1.402 -2.598 -2.031 -3.766 c -0.992 -0.77 -2.031 -1.77 -4.145 -2.852 c 1.453 0.379 2.492 0.813 3.305 1.301 c -6.414 -11.941 -6.934 -13.523 -9.133 -18.684 m 0.004 0" style="fill:#000"/>
+     </g>
+    </g>
+   </g>
+  </g>
+ </g>
+ <g>
+  <g>
+   <!-- color: #19a0e3 -->
+   <g>
+    <path d="m 24 10 c -1.07 2.617 -1.715 4.332 -2.902 6.875 c 0.727 0.77 1.621 1.672 3.078 2.688 c -1.566 -0.641 -2.629 -1.289 -3.426 -1.957 c -1.523 3.176 -3.91 7.699 -8.75 16.395 c 3.805 -2.195 6.754 -3.551 9.504 -4.066 c -0.121 -0.508 -0.188 -1.055 -0.184 -1.629 l 0.004 -0.121 c 0.063 -2.438 1.328 -4.313 2.832 -4.184 c 1.5 0.125 2.668 2.207 2.609 4.645 c -0.012 0.457 -0.063 0.898 -0.156 1.309 c 2.719 0.531 5.637 1.887 9.391 4.055 c -0.738 -1.363 -1.402 -2.598 -2.031 -3.766 c -0.992 -0.77 -2.031 -1.77 -4.145 -2.852 c 1.453 0.379 2.492 0.813 3.305 1.301 c -6.414 -11.941 -6.934 -13.523 -9.133 -18.684 m 0.004 0" style="fill:#f9f9f9"/>
+   </g>
+  </g>
+ </g>
+ <g>
+  <path d="m 40.03 7.531 c 3.712 4.084 5.969 9.514 5.969 15.469 0 12.703 -10.297 23 -23 23 c -5.954 0 -11.384 -2.256 -15.469 -5.969 4.178 4.291 10.01 6.969 16.469 6.969 c 12.703 0 23 -10.298 23 -23 0 -6.462 -2.677 -12.291 -6.969 -16.469 z" style="opacity:0.1"/>
+ </g>
+</svg>
+ARCH_ROUND_SVG
 
 # Dolphin/Qt font: intentionally NOT pinned. The source box has no font=
 # override in qt6ct/kdeglobals/gtk, so Qt resolves fontconfig sans (Noto Sans)
 # for both shell and apps; forcing an explicit face/size here is what kept
 # dolphin looking different from the source.
+#
+# Icons: breeze-dark, exactly like the source box. Numix-Circle is gone; the
+# round Arch branding for the launcher applet lives in the bundled SVG above.
 backup "$HOME/.config/kdeglobals"
 cat > "$HOME/.config/kdeglobals" <<'KDEGLOBALS'
+[Icons]
+Theme=breeze-dark
+
 [General]
 ColorScheme=Noctalia
 TerminalApplication=foot
 UseSystemBell=true
 
-[Icons]
-Theme=Numix-Circle
+[KDE]
+ShowDeleteCommand=false
+contrast=4
 KDEGLOBALS
+
+# mpv + mpv-mpris (mangowm's media player widget): hardware decode + yellow
+# subtitles with a black drop shadow.
+backup "$HOME/.config/mpv/mpv.conf"
+cat > "$HOME/.config/mpv/mpv.conf" <<'MPV'
+hwdec=auto
+sub-color=#ffff00
+sub-shadow-color=#000000
+sub-shadow-offset=1
+sub-blur=0
+MPV
 
 backup "$HOME/.config/dolphinrc"
 cat > "$HOME/.config/dolphinrc" <<'DOLPHIN'
@@ -842,7 +763,8 @@ ColorScheme=Noctalia
 DOLPHIN
 
 # Drop Dolphin's "Set Folder Icon" (Definir icono de carpeta) context-menu
-# entry: it's useless with Numix icons and just clutters the right-click menu.
+# entry: with the plain hicolor icon set it opens a cluttered folder picker the
+# source box doesn't offer either; keep the menu lean.
 say "Removing the Dolphin 'Set Folder Icon' context-menu plugin"
 sudo rm -f "$(command -v dolphin 2>/dev/null >/dev/null && find /usr/lib -name setfoldericonitemaction.so 2>/dev/null | head -1)"
 
