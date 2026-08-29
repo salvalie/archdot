@@ -589,7 +589,7 @@ settings_show_advanced = true
 
 [theme]
 builtin = "Noctalia"
-mode = "dark"
+mode = "light"
 source = "wallpaper"
 
     [theme.templates]
