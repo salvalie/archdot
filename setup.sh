@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-SELF_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+
 HOME_BAK="$HOME/.dotarch-backup-$(date +%Y%m%d%H%M%S)"
 
 # ------------------------------------------------------------------------------
@@ -663,8 +663,154 @@ backup "$HOME/.config/qt6ct/qt6ct.conf"
 # different filename so noctalia cannot clobber it, and point qt6ct at that.
 mkdir -p "$HOME/.local/share/color-schemes"
 backup "$HOME/.local/share/color-schemes/noctalia-classic.colors"
-install -m 644 "$SELF_DIR/assets/noctalia-classic.colors" \
-    "$HOME/.local/share/color-schemes/noctalia-classic.colors"
+cat > "$HOME/.local/share/color-schemes/noctalia-classic.colors" <<'NOCTALIA_CLASSIC'
+[KDE]
+contrast=4
+
+[General]
+ColorScheme=Noctalia
+Name=noctalia
+
+[ColorEffects:Disabled]
+Color=255,255,255
+ColorAmount=0
+ColorEffect=0
+ContrastAmount=0.65
+ContrastEffect=1
+IntensityAmount=0.1
+IntensityEffect=2
+
+[ColorEffects:Inactive]
+ChangeSelectionColor=true
+Color=226,226,226
+ColorAmount=0.025
+ColorEffect=2
+ContrastAmount=0.1
+ContrastEffect=2
+Enable=false
+IntensityAmount=0
+IntensityEffect=0
+
+[Colors:Button]
+BackgroundAlternate=243,243,243
+BackgroundNormal=232,232,232
+DecorationFocus=148,74,0
+DecorationHover=148,74,0
+ForegroundActive=148,74,0
+ForegroundInactive=71,71,71
+ForegroundLink=117,88,69
+ForegroundNegative=186,26,26
+ForegroundNeutral=95,97,53
+ForegroundNormal=27,27,27
+ForegroundPositive=95,97,53
+ForegroundVisited=91,65,47
+
+[Colors:Complementary]
+BackgroundAlternate=243,243,243
+BackgroundNormal=249,249,249
+DecorationFocus=148,74,0
+DecorationHover=148,74,0
+ForegroundActive=148,74,0
+ForegroundInactive=71,71,71
+ForegroundLink=117,88,69
+ForegroundNegative=186,26,26
+ForegroundNeutral=95,97,53
+ForegroundNormal=113,55,0
+ForegroundPositive=95,97,53
+ForegroundVisited=91,65,47
+
+[Colors:Header]
+BackgroundAlternate=249,249,249
+BackgroundNormal=238,238,238
+DecorationFocus=148,74,0
+DecorationHover=148,74,0
+ForegroundActive=148,74,0
+ForegroundInactive=71,71,71
+ForegroundLink=117,88,69
+ForegroundNegative=186,26,26
+ForegroundNeutral=95,97,53
+ForegroundNormal=27,27,27
+ForegroundPositive=95,97,53
+ForegroundVisited=91,65,47
+
+[Colors:Header][Inactive]
+BackgroundAlternate=238,238,238
+BackgroundNormal=249,249,249
+DecorationFocus=148,74,0
+DecorationHover=148,74,0
+ForegroundActive=148,74,0
+ForegroundInactive=71,71,71
+ForegroundLink=117,88,69
+ForegroundNegative=186,26,26
+ForegroundNeutral=95,97,53
+ForegroundNormal=27,27,27
+ForegroundPositive=95,97,53
+ForegroundVisited=91,65,47
+
+[Colors:Selection]
+BackgroundAlternate=243,243,243
+BackgroundNormal=148,74,0
+DecorationFocus=148,74,0
+DecorationHover=148,74,0
+ForegroundActive=255,255,255
+ForegroundInactive=71,71,71
+ForegroundLink=117,88,69
+ForegroundNegative=255,218,214
+ForegroundNeutral=228,230,174
+ForegroundNormal=255,255,255
+ForegroundPositive=228,230,174
+ForegroundVisited=91,65,47
+
+[Colors:Tooltip]
+BackgroundAlternate=249,249,249
+BackgroundNormal=238,238,238
+DecorationFocus=148,74,0
+DecorationHover=148,74,0
+ForegroundActive=148,74,0
+ForegroundInactive=71,71,71
+ForegroundLink=117,88,69
+ForegroundNegative=186,26,26
+ForegroundNeutral=95,97,53
+ForegroundNormal=27,27,27
+ForegroundPositive=95,97,53
+ForegroundVisited=91,65,47
+
+[Colors:View]
+BackgroundAlternate=238,238,238
+BackgroundNormal=249,249,249
+DecorationFocus=113,55,0
+DecorationHover=255,255,255
+ForegroundActive=148,74,0
+ForegroundInactive=71,71,71
+ForegroundLink=117,88,69
+ForegroundNegative=186,26,26
+ForegroundNeutral=95,97,53
+ForegroundNormal=27,27,27
+ForegroundPositive=95,97,53
+ForegroundVisited=91,65,47
+
+[Colors:Window]
+BackgroundAlternate=255,220,197
+BackgroundNormal=238,238,238
+DecorationFocus=148,74,0
+DecorationHover=148,74,0
+ForegroundActive=148,74,0
+ForegroundInactive=71,71,71
+ForegroundLink=117,88,69
+ForegroundNegative=186,26,26
+ForegroundNeutral=95,97,53
+ForegroundNormal=27,27,27
+ForegroundPositive=95,97,53
+ForegroundVisited=91,65,47
+
+[WM]
+activeBackground=255,220,197
+activeBlend=113,55,0
+activeForeground=113,55,0
+inactiveBackground=249,249,249
+inactiveBlend=71,71,71
+inactiveForeground=71,71,71
+NOCTALIA_CLASSIC
 cat > "$HOME/.config/qt6ct/qt6ct.conf" <<'QT6CT'
 [Appearance]
 color_scheme_path=~/.local/share/color-schemes/noctalia-classic.colors
