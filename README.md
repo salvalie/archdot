@@ -21,7 +21,7 @@ Important Details
 
 Next Move
 1. Retest setup_noctalia.sh on the rolled-back clean target with --mango (slower: builds mangowm from AUR) to confirm the mango branch works end-to-end; --labwc was validated via the sandbox run.
-2. Review and commit setup_noctalia.sh and this README.
+2. Review and commit setup_noctalia.sh, rollback.sh and this README.
 
 Usage
 - setup_noctalia.sh [--labwc | --mango]   (no flag → interactive prompt, default labwc)
@@ -30,23 +30,22 @@ Usage
 - setup_noctalia.sh --help prints usage.
 
 Rollback to Pre-Setup Clean State (btrfs snapshot "backup")
-- Target .111 runs btrfs single disk nvme0n1p2 with subvols: @ (root, subvolid 256), @home (257), @log (258), @pkg (259). fstab mounts / as subvol=/@ and /home as subvol=/@home.
-- Bootloader = GRUB + UKI (grub.d/15_uki) + grub-btrfs. The "backup" snapshot = @/.snapshots/1/snapshot (created 2026-09-01 07:57, grub-btrfs label "backup"), the clean pre-setup root. grub-btrfs timeline snapshots 2/3/4 are hourly (08:00/09:00/10:00).
-- IMPORTANT: Booting the "backup" grub-btrfs entry only loads that snapshot read-only as /; it does NOT touch the persistent @ root. And it leaves /home (separate @home subvol) untouched. A true rollback must replace the @ subvol.
-- Snapshot 1 is readonly (btrfs sub show → Flags: readonly). When booted FROM it, / is read-only → cannot run pacman/setup. Only a rolled-back (writable) @ is usable for re-testing.
-- Rollback procedure (must run from a NORMAL boot into @, NOT from the snapshot; / requires password sudo, no NOPASSWD):
-  1. mount -t btrfs -o subvolid=5,compress=zstd:3 /dev/nvme0n1p2 /mnt/top
-  2. btrfs subvolume snapshot -r /mnt/top/@ /mnt/top/@.pre_rollback        # safety copy of current dirty @
-  3. mv /mnt/top/@ /mnt/top/@.dirty                                        # move dirty @ aside (old @ keeps subvolid 256)
-  4. btrfs subvolume snapshot /mnt/top/@.dirty/.snapshots/1/snapshot /mnt/top/@   # backup snapshot becomes new @ (new subvolid ~272)
-  5. Verify new @ clean: ls /mnt/top/@/usr/bin/labwc|mango|noctalia-greeter-session /etc/greetd → all absent
-  6. umount /mnt/top
-- No bootloader/fstab change needed: normal boot already loads subvol=/@, which now points to the new clean @.
-- Reset /home to pristine pre-setup (it is a separate subvol and is NOT restored by the root rollback): rm -rf /home/salva/.config /home/salva/.local /home/salva/.cache /home/salva/.dotarch-backup-* /home/salva/Desktop /home/salva/Documents /home/salva/Downloads /home/salva/Music /home/salva/Pictures /home/salva/Projects /home/salva/Public /home/salva/Templates /home/salva/Videos /home/salva/config.toml /home/salva/settings.toml (leaving original .bash_logout/.bash_profile/.bashrc). Preserve wanted files first to /tmp/opencode/home-preserve/ (e.g. config.toml, settings.toml, Pictures, Videos, .config/noctalia, .config/labwc).
-- After rollback, reboot to land in the clean root, then re-run setup_noctalia.sh. Preserved copies for safety: @.dirty (old post-setup root) and @.pre_rollback; they are not in the fstab path so they don't break boot. Can be deleted (btrfs subvolume delete) once no longer needed.
+- Target .111 runs btrfs single disk nvme0n1p2 with subvols: @ (root), @home (257), @log (258), @pkg (259). fstab mounts / as subvol=/@ and /home as subvol=/@home.
+- Bootloader = GRUB + UKI (grub.d/15_uki) + grub-btrfs. The "backup" snapshot = @/.snapshots/1/snapshot (grub-btrfs label "backup"), the clean pre-setup root. IMPORTANT: booting the "backup" entry only loads that snapshot read-only as /; it does NOT touch the persistent @, and leaves /home (separate @home subvol) untouched. A TRUE rollback must replace the @ subvol (and reset /home).
+- STREAMLINED: run rollback.sh (in this repo) as root on the target. One command does: mount top-level btrfs → safety snapshot @.pre_rollback<N> → move current root to @.dirty<N> → restore @ from the clean backup → verify clean → reset /home to pristine (first preserving noctalia config/Pictures/Videos to /tmp/opencode/home-preserve) → umount → reboot. round N auto-increments so earlier @.dirty/@.pre_rollback artifacts are preserved.
+  - scp rollback.sh; ssh ... "echo asdasd | sudo -S bash rollback.sh"   (one session, no NOPASSWD needed)
+  - Automatic suffix: round 1 → @.pre_rollback/@.dirty, round 2 → @.pre_rollback2/@.dirty2, etc.
+  - Override the clean snapshot source with ROLLBACK_SRC=…  (default /mnt/top/@.dirty/.snapshots/1/snapshot)
+- After reboot the box lands in the new clean @; /home is pristine (only .bash_logout/.bash_profile/.bashrc). Re-run setup_noctalia.sh. Old roots @.dirty<N>/@.pre_rollback<N> are not in the fstab path (won't break boot); delete with btrfs subvolume delete once no longer needed.
+- Manual equivalent (if rollback.sh is unusable, all in ONE ssh session to avoid mount vanishing between connections):
+  mkdir -p /mnt/top && mount -t btrfs -o subvolid=5,compress=zstd:3 /dev/nvme0n1p2 /mnt/top &&
+  btrfs subvolume snapshot -r /mnt/top/@ /mnt/top/@.pre_rollback2 && mv /mnt/top/@ /mnt/top/@.dirty2 &&
+  btrfs subvolume snapshot /mnt/top/@.dirty/.snapshots/1/snapshot /mnt/top/@ &&        # clean backup path (see below)
+  # verify /mnt/top/@ clean, then home reset + umount + reboot
 
 Relevant Files
 - /home/salva/dev/archdot/setup_noctalia.sh — the single installer; unified labwc/mango (flag or prompt), merged noctalia config, greetd/noctalia-greeter DM, AUR build for mangowm.
+- /home/salva/dev/archdot/rollback.sh — ONE-shot rollback to the clean btrfs backup snapshot (root swap + /home reset + reboot).
 - /home/salva/dev/archdot/changes to adddress on the bar/config.toml and settings.toml — source files for the merged noctalia config (settings.toml values used verbatim).
 - /home/salva/dev/archdot/README.md — this file.
 - ~/.config/noctalia/config.toml (declarative base) + ~/.local/state/noctalia/settings.toml (GUI overrides, loaded last) — the two sources merged into the script's config.
