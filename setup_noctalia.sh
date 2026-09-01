@@ -1225,12 +1225,6 @@ cat > "$HOME/.config/dolphinrc" <<'DOLPHIN'
 ColorScheme=noctalia
 DOLPHIN
 
-# Drop Dolphin's "Set Folder Icon" (Definir icono de carpeta) context-menu
-# entry: with the plain hicolor icon set it opens a cluttered folder picker the
-# source box doesn't offer either; keep the menu lean.
-say "Removing the Dolphin 'Set Folder Icon' context-menu plugin"
-sudo rm -f "$(command -v dolphin 2>/dev/null >/dev/null && find /usr/lib -name setfoldericonitemaction.so 2>/dev/null | head -1)"
-
 # Write a user portal-backend override that routes ScreenCast/Screenshot to the
 # wlr portal and disables Secret/Inhibit, named for the selected WM.
 PORTALS_FILE="$HOME/.config/xdg-desktop-portal/${WM}-portals.conf"
