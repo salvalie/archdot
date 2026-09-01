@@ -9,7 +9,7 @@ Personal Arch Linux desktop setup for building a lightweight Wayland desktop on 
   - `mangowm` (rolling build from the AUR)
   - pick at runtime with `--labwc` / `--mango`, or answer an interactive prompt
 - **Display manager** — greetd + the Noctalia greeter (agreety as fallback)
-- **GPU/platform auto-detection** — detects Intel / AMD / NVIDIA from `/sys/class/drm` and installs the matching drivers + CPU microcode. Intel is split into legacy (`libva-intel-driver`, pre-Broadwell) and modern (`intel-media-driver`); unmatched hardware assumes modern. If detection fails entirely it installs the FOSS (mesa) stacks for all three vendors plus every microcode.
+- **GPU/platform auto-detection** — detects Intel / AMD / NVIDIA from `/sys/class/drm` and installs the matching drivers + CPU microcode. Intel is split into legacy (`libva-intel-driver`, pre-Broadwell + old-media Atom incl. Bay Trail & Cherry Trail/Braswell) and modern (`intel-media-driver`); unmatched hardware assumes modern. If detection fails entirely it installs the FOSS (mesa) stacks for all three vendors plus every microcode.
 - **Shared merged Noctalia config** — same bar, dock, launcher, lockscreen and theme for both window managers; wallpaper points at the packaged default so nothing breaks across home resets.
 
 ## Usage
