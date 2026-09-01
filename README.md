@@ -3,13 +3,15 @@ This repo is for personal use to build a lightweight Desktop Environment on a cl
 Objective
 - setup_noctalia.sh is the SINGLE installer: it asks (or takes a flag) for the window manager — labwc or mango — and configures it from one codebase. It replaces the old split scripts (setup_labwc.sh, setup_mango.sh), which have been deleted (backed up elsewhere).
 - Display manager is greetd + noctalia-greeter (graphical, Noctalia-themed) with agreety as fallback.
+- GPU/platform detection: the script auto-detects the GPU vendor (Intel / AMD / NVIDIA) from /sys/class/drm and adds the matching driver packages + CPU microcode (intel-ucode/amd-ucode). For Intel it distinguishes modern (Broadwell+ → intel-media-driver) from legacy (G45–Haswell → libva-intel-driver); force legacy with INTEL_OLD=1.
 - The noctalia config is IDENTICAL across labwc/mango (bar position bottom, taskbar start / settings center / disks end, dock, launcher pinned, keyboard custom labels, osd, lockscreen with HDMI-A-2, wallpaper pointing at the packaged default /usr/share/noctalia/assets/noctalia-wallpaper.png, theme templates, taskbar capsule, active_window icon_only, arch-round launcher icon). Verify any future config edit updates ALL scripts (diff the rendered heredocs; each ~6318 bytes).
 - IMPORTANT wallpaper gotcha: the wallpaper path must be a file that survives the /home rollback cleanup (which deletes /home/salva/Pictures/). A /home-resident path (e.g. a wallhaven download) OVERRIDES and cancels the noctalia default, so no wallpaper shows until one is set with the wallhaven plugin. Use /usr/share/noctalia/assets/noctalia-wallpaper.png (package-provided, always present) as the default.
 
 Current Status
 - setup_noctalia.sh is the only script; old setup_labwc.sh/setup_mango.sh deleted (merged logic folded in; both WM config blocks verified identical to the originals, syntax OK, sandbox-run for both branches).
+- Platform/GPU auto-detection added (intel modern/legacy, amd, nvidia) + matching vendor packages & CPU microcode. Unit-tested for all vendors incl. the target (Intel N100/Alder Lake-N → intel + intel-media-driver).
 - MANGO TEST PASSED end-to-end on the clean target: --mango branch ran headless to SCRIPT_EXIT=0; built yay + AUR (wlroots0.20-hidpi-xprop, scenefx0.5, mangowm-git) → /usr/bin/mango; greetd + seatd enabled, default graphical.target, /etc/greetd/config.toml correct; all 9 mango cfg files + config.conf present; noctalia config 6318 bytes (matches labwc baseline); noctalia config validate ✓ (3 cosmetic warnings).
-- Box currently booted into the mango-tested root (post-setup). Rollback.sh is in the repo and can return it to clean (round 3) when needed. Temp NOPASSWD sudoers removed.
+- Target rolled back to clean (round 3) via rollback.sh; currently booted into the clean root. Next: labwc re-test with platform detection active.
 
 Important Details
 - Project: git repo /home/salva/dev/archdot

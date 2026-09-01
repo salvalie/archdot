@@ -24,10 +24,15 @@ SETUP_BINS="labwc mango greetd noctalia-greeter-session agreety"
 [ "$(id -u)" -eq 0 ] || { echo "must run as root (sudo)"; exit 1; }
 [ -e "$DEV" ] || { echo "device $DEV not found"; exit 1; }
 
-N=1
-while btrfs subvolume list "$TOP" 2>/dev/null | grep -qE "@\.pre_rollback$N|@\.dirty$N"; do N=$((N+1)); done
-DIRTY="@.dirty$N"
-PRE="@.pre_rollback$N"
+N=0
+while :; do
+    D="@.dirty";      [ "$N" -gt 0 ] && D="@.dirty$N"
+    P="@.pre_rollback"; [ "$N" -gt 0 ] && P="@.pre_rollback$N"
+    btrfs subvolume list "$TOP" 2>/dev/null | grep -q " $P$\| $D$" || break
+    N=$((N+1))
+done
+DIRTY="$D"
+PRE="$P"
 
 echo "== round $N: PRE=$PRE DIRTY=$DIRTY =="
 
@@ -63,7 +68,12 @@ rm -rf /home/salva/.config /home/salva/.local /home/salva/.cache /home/salva/.do
        /home/salva/Desktop /home/salva/Documents /home/salva/Downloads /home/salva/Music \
        /home/salva/Pictures /home/salva/Projects /home/salva/Public /home/salva/Templates \
        /home/salva/Videos /home/salva/.bash_history
-[ "$(ls -A /home/salva)" = ".bash_logout .bash_profile .bashrc" ] || echo "WARN: /home not pristine: $(ls -A /home/salva)"
+remaining=$(ls -A /home/salva)
+[ "$(printf '%s' "$remaining" | wc -l)" -eq 3 ] && \
+    printf '%s\n' "$remaining" | sort | grep -qx '\.bash_logout' && \
+    printf '%s\n' "$remaining" | sort | grep -qx '\.bash_profile' && \
+    printf '%s\n' "$remaining" | sort | grep -qx '\.bashrc' \
+        || echo "WARN: /home not pristine: $remaining"
 
 echo "== 6/7 umount =="
 umount "$TOP"

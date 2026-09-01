@@ -62,8 +62,8 @@ PACKAGES=(
     # -- display manager / seat --------------------------------------------------
     greetd greetd-agreety seatd wlopm xdg-desktop-portal
 
-    # -- gpu: intel (change/comment for amd/nvidia) ----------------------------
-    mesa vulkan-intel intel-media-driver libva-utils intel-ucode xorg-xwayland
+    # -- gpu: common GL/VAAPI userspace (vendor drivers auto-detected below) ---
+    mesa libva-utils xorg-xwayland
 
     # -- audio ------------------------------------------------------------------
     pipewire pipewire-alsa pipewire-pulse wireplumber pavucontrol alsa-utils
@@ -111,6 +111,85 @@ if [ "$WM" = "labwc" ]; then
 else
     WM_SESSION_BIN="/usr/bin/mango"
 fi
+
+# ------------------------------------------------------------------------------
+# Platform / GPU detection (Intel, AMD, NVIDIA) — adds vendor-specific packages
+# and the matching CPU microcode to PACKAGES.
+#   GPU_VENDOR : intel | amd | nvidia | unknown
+#   INTEL_OLD  : 1 when the Intel GPU predates Skylake/Broadwell+ (needs the
+#                legacy VA-API driver libva-intel-driver instead of
+#                intel-media-driver). Set, e.g. `INTEL_OLD=1`, to force it.
+# Detection reads the kernel-visible PCI vendor/device IDs from /sys/class/drm.
+# ------------------------------------------------------------------------------
+detect_platform() {
+    GPU_VENDOR="unknown"
+    INTEL_OLD=0
+
+    # Find PCI slots that expose a DRM connector (0-3 = the device fn).
+    for d in /sys/class/drm/card[0-9]/device; do
+        [ -e "$d/vendor" ] || continue
+        vendor=$(cat "$d/vendor" 2>/dev/null)   # e.g. 0x8086
+        devid=$(cat "$d/device" 2>/dev/null)    # e.g. 0x9bc4
+        [ -n "$vendor" ] || continue
+
+        case "$vendor" in
+            0x8086) GPU_VENDOR=intel;  INTEL_PCIDEV="$devid"; break ;;
+            0x1002|0x1022) GPU_VENDOR=amd; break ;;
+            0x10de) GPU_VENDOR=nvidia; break ;;
+        esac
+    done
+
+    # Intel branch: pick the VA-API driver by GPU generation.
+    if [ "$GPU_VENDOR" = "intel" ]; then
+        # Legacy = pre-Broadwell (G45 through Haswell): driver i965_vdrv_video.
+        # Broadwell+ and everything newer/unrecognized default to MODERN and use
+        # the maintained intel-media-driver. We flag legacy ONLY for the explicit
+        # known-old device ids below; anything else (new gen, or an id we can't
+        # read) is treated as modern so the box always gets a working VA-API
+        # driver. Override with INTEL_OLD=1 to force legacy.
+        INTEL_OLD=0   # default modern unless a legacy id below matches
+        case "$INTEL_PCIDEV" in
+            # Haswell (GT1/GT2/GT3) & earlier that lack the new media engine
+            0x0402|0x0406|0x040a|0x040b|0x040e|0x0412|0x0416|0x041a|0x041e| \
+            0x0422|0x0426|0x042a|0x042b|0x042e|0x0432|0x043a|0x043e| \
+            0x0a06|0x0a16|0x0a26|0x0a2e|0x0a3e| \
+            0x0c02|0x0c06|0x0c0a|0x0c0b|0x0c0e|0x0c12|0x0c1a|0x0c22|0x0c2a|0x0c2e|0x0c3e| \
+            0x0d02|0x0d06|0x0d0a|0x0d0b|0x0d0e|0x0d12|0x0d1a|0x0d22|0x0d2a|0x0d2e|0x0d3e| \
+            0x0f30|0x0f31|0x0f32|0x0f33|0x0f34|0x0f35|0x0f36|0x0f37|0x0f38|0x0f39|0x0f3a|0x0f3c| \
+            0x0102|0x0106|0x010a|0x0112|0x0116|0x0122|0x0126|0x012a|0x0152|0x0156|0x015a|0x0162|0x0166|0x016a)
+                INTEL_OLD=1 ;;
+        esac
+    fi
+    export GPU_VENDOR INTEL_OLD
+}
+
+detect_platform
+
+case "$GPU_VENDOR" in
+    intel)
+        if [ "$INTEL_OLD" -eq 1 ]; then
+            GPGPU_PKGS=(libva-intel-driver vulkan-intel intel-ucode)
+            GPX_NOTE="Intel (legacy, G45–Haswell): using libva-intel-driver"
+        else
+            GPGPU_PKGS=(intel-media-driver vulkan-intel intel-ucode)
+            GPX_NOTE="Intel (Broadwell+): using intel-media-driver"
+        fi
+        ;;
+    amd)
+        GPGPU_PKGS=(vulkan-radeon libva-mesa-driver amd-ucode)
+        GPX_NOTE="AMD: vulkan-radeon + libva-mesa-driver"
+        ;;
+    nvidia)
+        GPGPU_PKGS=(nvidia nvidia-utils nvidia-settings)
+        GPX_NOTE="NVIDIA: proprietary nvidia + nvidia-utils"
+        ;;
+    *)
+        GPGPU_PKGS=()
+        GPX_NOTE="unknown GPU — no vendor driver added (install manually if needed)"
+        ;;
+esac
+PACKAGES+=( "${GPGPU_PKGS[@]}" )
+say "Platform: $GPU_VENDOR — $GPX_NOTE"
 
 # ------------------------------------------------------------------------------
 # Helpers
