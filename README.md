@@ -1,8 +1,15 @@
-These scripts are for personal use with the intention to build lightweight Desktop Enviroments on clean minimal/server arch linux instalations with Noxtalia shell and for now two different compositors, labwc and mango.
+This repo is for personal use to build a lightweight Desktop Environment on a clean minimal/server Arch Linux installation with the Noctalia shell, and for now two different compositors: labwc and mango (mangowm).
 
 Objective
-- Move the Arch/CachyOS desktop setup from mangowm to labwc (official repo) with greetd + noctalia-greeter (graphical, Noctalia-themed) as the display manager, based on setup_mango.sh.
-- Finalize setup_labwc.sh, apply fixes live on target PC (192.168.0.111), mirror fixes into the script, then re-test on a clean Arch install the user plans to do.
+- setup_noctalia.sh is the SINGLE installer: it asks (or takes a flag) for the window manager — labwc or mango — and configures it from one codebase. It replaces the old split scripts (setup_labwc.sh, setup_mango.sh), which have been deleted (backed up elsewhere).
+- Display manager is greetd + noctalia-greeter (graphical, Noctalia-themed) with agreety as fallback.
+- The noctalia config is IDENTICAL across labwc/mango (bar position bottom, taskbar start / settings center / disks end, dock, launcher pinned, keyboard custom labels, osd, lockscreen with HDMI-A-2, wallpaper pointing at the packaged default /usr/share/noctalia/assets/noctalia-wallpaper.png, theme templates, taskbar capsule, active_window icon_only, arch-round launcher icon). Verify any future config edit updates ALL scripts (diff the rendered heredocs; each ~6318 bytes).
+- IMPORTANT wallpaper gotcha: the wallpaper path must be a file that survives the /home rollback cleanup (which deletes /home/salva/Pictures/). A /home-resident path (e.g. a wallhaven download) OVERRIDES and cancels the noctalia default, so no wallpaper shows until one is set with the wallhaven plugin. Use /usr/share/noctalia/assets/noctalia-wallpaper.png (package-provided, always present) as the default.
+
+Current Status
+- setup_noctalia.sh is the only script; old setup_labwc.sh/setup_mango.sh deleted (merged logic folded in; both WM config blocks verified identical to the originals, syntax OK, sandbox-run for both branches).
+- Re-testing now on the clean target: setup_noctalia.sh --mango (building mangowm from the AUR).
+
 Important Details
 - Project: git repo /home/salva/dev/archdot
 - Credentials: target salva@192.168.0.111 ssh/sudo password asdasd . SSH needs -o StrictHostKeyChecking=no -o UserKnownHostsFile=/tmp/opencode/known_hosts2-111 (per-target known_hosts file; wipe on fresh installs). Local tool dir /tmp/opencode/ may be wiped on reboots.
@@ -13,17 +20,36 @@ Important Details
 
 
 Next Move
-1. re-test setup labwc on target salva@192.168.0.111 ssh/sudo password asdasd.
-2. Verify all script edits (bash -n setup_labwc.sh setup_mango.sh), then review and commit both scripts (delete old setup.sh if superseded); user will do clean Arch reinstall for final re-test.
-3. change setup_mango.sh to greetd and noctalia-greeter as well as setup.sh
+1. Retest setup_noctalia.sh on the rolled-back clean target with --mango (slower: builds mangowm from AUR) to confirm the mango branch works end-to-end; --labwc was validated via the sandbox run.
+2. Review and commit setup_noctalia.sh and this README.
+
+Usage
+- setup_noctalia.sh [--labwc | --mango]   (no flag → interactive prompt, default labwc)
+- Headless (target .111): reinstall temp NOPASSWD sudoers, launch as salva via
+  nohup sh -c "bash /tmp/setup_noctalia.sh --mango > /tmp/setup.log 2>&1; echo SCRIPT_EXIT=$? > /tmp/setup.exit" &
+- setup_noctalia.sh --help prints usage.
+
+Rollback to Pre-Setup Clean State (btrfs snapshot "backup")
+- Target .111 runs btrfs single disk nvme0n1p2 with subvols: @ (root, subvolid 256), @home (257), @log (258), @pkg (259). fstab mounts / as subvol=/@ and /home as subvol=/@home.
+- Bootloader = GRUB + UKI (grub.d/15_uki) + grub-btrfs. The "backup" snapshot = @/.snapshots/1/snapshot (created 2026-09-01 07:57, grub-btrfs label "backup"), the clean pre-setup root. grub-btrfs timeline snapshots 2/3/4 are hourly (08:00/09:00/10:00).
+- IMPORTANT: Booting the "backup" grub-btrfs entry only loads that snapshot read-only as /; it does NOT touch the persistent @ root. And it leaves /home (separate @home subvol) untouched. A true rollback must replace the @ subvol.
+- Snapshot 1 is readonly (btrfs sub show → Flags: readonly). When booted FROM it, / is read-only → cannot run pacman/setup. Only a rolled-back (writable) @ is usable for re-testing.
+- Rollback procedure (must run from a NORMAL boot into @, NOT from the snapshot; / requires password sudo, no NOPASSWD):
+  1. mount -t btrfs -o subvolid=5,compress=zstd:3 /dev/nvme0n1p2 /mnt/top
+  2. btrfs subvolume snapshot -r /mnt/top/@ /mnt/top/@.pre_rollback        # safety copy of current dirty @
+  3. mv /mnt/top/@ /mnt/top/@.dirty                                        # move dirty @ aside (old @ keeps subvolid 256)
+  4. btrfs subvolume snapshot /mnt/top/@.dirty/.snapshots/1/snapshot /mnt/top/@   # backup snapshot becomes new @ (new subvolid ~272)
+  5. Verify new @ clean: ls /mnt/top/@/usr/bin/labwc|mango|noctalia-greeter-session /etc/greetd → all absent
+  6. umount /mnt/top
+- No bootloader/fstab change needed: normal boot already loads subvol=/@, which now points to the new clean @.
+- Reset /home to pristine pre-setup (it is a separate subvol and is NOT restored by the root rollback): rm -rf /home/salva/.config /home/salva/.local /home/salva/.cache /home/salva/.dotarch-backup-* /home/salva/Desktop /home/salva/Documents /home/salva/Downloads /home/salva/Music /home/salva/Pictures /home/salva/Projects /home/salva/Public /home/salva/Templates /home/salva/Videos /home/salva/config.toml /home/salva/settings.toml (leaving original .bash_logout/.bash_profile/.bashrc). Preserve wanted files first to /tmp/opencode/home-preserve/ (e.g. config.toml, settings.toml, Pictures, Videos, .config/noctalia, .config/labwc).
+- After rollback, reboot to land in the clean root, then re-run setup_noctalia.sh. Preserved copies for safety: @.dirty (old post-setup root) and @.pre_rollback; they are not in the fstab path so they don't break boot. Can be deleted (btrfs subvolume delete) once no longer needed.
 
 Relevant Files
-- /home/salva/dev/archdot/setup_labwc.sh — main deliverable; all fixes staged in working tree (icon fix pending). 747 lines.
-- /home/salva/dev/archdot/setup_mango.sh — parallel script; gnome-keyring removed (3 refs), dolphin/portal edits mirrored.
-- ~/.config/noctalia/config.toml (target .111) — launcher custom_image = "$HOME/.local/share/icons/arch-round.svg" (unexpanded, the bug).
-- ~/.local/share/icons/arch-round.svg (target) — 3333 bytes, valid SVG (39 lines), present; not rendered due to path bug.
-- ~/.config/labwc/rc.xml, menu.xml, ~/.config/foot/foot.ini, ~/.config/dolphinrc, ~/.config/xdg-desktop-portal/labwc-portals.conf — all fixed on target and mirrored in script.
-- /etc/greetd/config.toml (target .111) — now command = "/usr/bin/noctalia-greeter-session", user greeter; .bak in /etc/greetd/config.toml.bak.
-- /tmp/opencode/apply_ws.py, /tmp/opencode/menu.xml — scp'd patch/menu artifacts (local).
+- /home/salva/dev/archdot/setup_noctalia.sh — the single installer; unified labwc/mango (flag or prompt), merged noctalia config, greetd/noctalia-greeter DM, AUR build for mangowm.
+- /home/salva/dev/archdot/changes to adddress on the bar/config.toml and settings.toml — source files for the merged noctalia config (settings.toml values used verbatim).
+- /home/salva/dev/archdot/README.md — this file.
+- ~/.config/noctalia/config.toml (declarative base) + ~/.local/state/noctalia/settings.toml (GUI overrides, loaded last) — the two sources merged into the script's config.
+- Preserve dir on .111: /tmp/opencode/home-preserve/ (config.toml, settings.toml, Pictures, Videos, .config/noctalia, .config/labwc) staged before /home cleanup.
+- Preserved subvols on .111: @.dirty (old post-setup root, subvolid 256), @.pre_rollback (subvolid 271) — deletable once no longer needed.
 - /home/salva/dev/archdot/.git — git repo, branch main, changes uncommitted.
-- /home/salva/dev/dotarch/setup.sh — old non-git copy (superseded).

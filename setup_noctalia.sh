@@ -5,6 +5,46 @@ set -euo pipefail
 
 HOME_BAK="$HOME/.dotarch-backup-$(date +%Y%m%d%H%M%S)"
 
+say()  { printf '\n\033[1;36m== %s ==\033[0m\n' "$*"; }
+die()  { printf '\n\033[1;31m== %s ==\033[0m\n' "$*" >&2; exit 1; }
+
+# ------------------------------------------------------------------------------
+# Window manager selection: labwc or mangowm.
+#   setup_noctalia.sh --labwc     -> configure labwc (default; nothing extra)
+#   setup_noctalia.sh --mango     -> configure mangowm (builds it from the AUR)
+#   setup_noctalia.sh             -> ask interactively
+# ------------------------------------------------------------------------------
+WM=""
+for arg in "$@"; do
+    case "$arg" in
+        --labwc) WM="labwc" ;;
+        --mango) WM="mango" ;;
+        --help|-h)
+            echo "Usage: $0 [--labwc | --mango]"
+            echo "  --labwc  configure the labwc window manager (default)"
+            echo "  --mango  configure mangowm (built from the AUR)"
+            exit 0
+            ;;
+        *) ;;
+    esac
+done
+
+if [ -z "$WM" ]; then
+    printf '%s\n' "Which window manager do you want to configure?"
+    printf '  1) labwc   (stable, official repos; no extra build steps)\n'
+    printf '  2) mango   (mangowm, rolling build from the AUR; slower)\n'
+    while [ -z "$WM" ]; do
+        read -rp "Type 1 or 2 [1]: " choice
+        case "$choice" in
+            1|labwc|Labwc|LABWC) WM="labwc" ;;
+            2|mango|Mango|MANGO) WM="mango" ;;
+            "") WM="labwc" ;;
+            *) printf 'Invalid choice: %s\n' "$choice" ;;
+        esac
+    done
+fi
+say "Selected window manager: $WM"
+
 # ------------------------------------------------------------------------------
 # EDIT ME — application list.
 # ------------------------------------------------------------------------------
@@ -13,12 +53,14 @@ HOME_BAK="$HOME/.dotarch-backup-$(date +%Y%m%d%H%M%S)"
 # it with pacman (works on CachyOS); if it is not in your enabled repos it
 # falls back to the official greetd-agreety greeter so the box still boots to a
 # login screen. Everything else below is official-repo only.
+# Common packages (everything except the labwc binary), so labwc and mangowm
+# share the same base. mangowm itself comes from the AUR (see AUR_PACKAGES).
 PACKAGES=(
-    # -- desktop / wm (official) -------------------------------------------------
+    # -- desktop / shell (official) ----------------------------------------------
     breeze noctalia foot
 
-    # -- wm + display manager ----------------------------------------------------
-    labwc greetd greetd-agreety seatd wlopm xdg-desktop-portal
+    # -- display manager / seat --------------------------------------------------
+    greetd greetd-agreety seatd wlopm xdg-desktop-portal
 
     # -- gpu: intel (change/comment for amd/nvidia) ----------------------------
     mesa vulkan-intel intel-media-driver libva-utils intel-ucode xorg-xwayland
@@ -53,12 +95,26 @@ PACKAGES=(
     bash-completion pacman-contrib reflector openssh polkit-kde-agent ufw
 )
 
+# AUR-only packages, used ONLY when WM=mango: mangowm itself plus its build
+# deps (a wlroots 0.20 provider + scenefx 0.5). Not installed for labwc.
+AUR_PACKAGES=(
+    wlroots0.20-hidpi-xprop   # libwlroots-0.20.so (AUR-only build dep of mangowm-git)
+    scenefx0.5                # scenefx 0.5 (AUR-only build dep of mangowm-git)
+    mangowm-git               # the mango WM itself (rolling/development build)
+)
+
+# The WM binary, used as the greetd-agreety fallback session command and the
+# thing the selected window manager launches.
+if [ "$WM" = "labwc" ]; then
+    PACKAGES+=(labwc)
+    WM_SESSION_BIN="/usr/bin/labwc"
+else
+    WM_SESSION_BIN="/usr/bin/mango"
+fi
+
 # ------------------------------------------------------------------------------
 # Helpers
 # ------------------------------------------------------------------------------
-say()  { printf '\n\033[1;36m== %s ==\033[0m\n' "$*"; }
-die()  { printf '\n\033[1;31m== %s ==\033[0m\n' "$*" >&2; exit 1; }
-
 sys_enable() {
     for svc in "$@"; do
         sudo systemctl enable --now "$svc" 2>/dev/null || sudo systemctl enable "$svc" \
@@ -72,6 +128,19 @@ usr_enable() {
             || systemctl --user enable "$svc" 2>/dev/null \
             || printf '   [warn] could not enable user unit %s (no session?)\n' "$svc"
     done
+}
+
+# ensure_yay: build the yay AUR helper once, if it is not already present.
+ensure_yay() {
+    if command -v yay >/dev/null 2>&1; then
+        return
+    fi
+    say "Building yay from AUR"
+    sudo pacman -S --noconfirm --needed base-devel git go
+    tmp="$(mktemp -d)"
+    git clone --depth=1 https://aur.archlinux.org/yay.git "$tmp/yay"
+    (cd "$tmp/yay" && makepkg -si --noconfirm --needed)
+    command -v yay >/dev/null 2>&1 || die "yay build failed."
 }
 
 # ------------------------------------------------------------------------------
@@ -99,6 +168,15 @@ say "Installing packages from official repos"
 sudo pacman -S --noconfirm --needed "${PACKAGES[@]}"
 
 # ------------------------------------------------------------------------------
+# Mango: mangowm from the AUR (only when WM=mango)
+# ------------------------------------------------------------------------------
+if [ "$WM" = "mango" ]; then
+    say "Installing mangowm-git from AUR"
+    ensure_yay
+    yay -S --noconfirm --needed "${AUR_PACKAGES[@]}"
+fi
+
+# ------------------------------------------------------------------------------
 # Greeter: noctalia-greeter (official on CachyOS, AUR on vanilla Arch)
 # ------------------------------------------------------------------------------
 # Try the packaged greeter first. On a CachyOS install with the cachyos repo
@@ -113,13 +191,7 @@ elif sudo pacman -S --noconfirm --needed noctalia-greeter >/dev/null 2>&1 \
     GREETER_SESSION="$(command -v noctalia-greeter-session)"
 else
     say "noctalia-greeter not in your repos — installing from the AUR"
-    sudo pacman -S --noconfirm --needed base-devel git
-    if ! command -v yay >/dev/null 2>&1; then
-        rm -rf /tmp/yay-build; mkdir -p /tmp/yay-build
-        git clone --depth 1 https://aur.archlinux.org/yay-bin.git /tmp/yay-build/yay-bin >/dev/null 2>&1 \
-            && cd /tmp/yay-build/yay-bin && makepkg -si --noconfirm >/dev/null 2>&1
-        cd /
-    fi
+    ensure_yay
     if command -v yay >/dev/null 2>&1; then
         yay -S --noconfirm --needed noctalia-greeter >/dev/null 2>&1 \
             && command -v noctalia-greeter-session >/dev/null 2>&1 \
@@ -131,11 +203,16 @@ fi
 # Configs (with backups of whatever already exists)
 # ------------------------------------------------------------------------------
 say "Deploying configs (backups in $HOME_BAK)"
-mkdir -p "$HOME_BAK" "$HOME/.config/labwc" "$HOME/.config/noctalia" \
+mkdir -p "$HOME_BAK" "$HOME/.config/noctalia" \
          "$HOME/.config/foot" "$HOME/.config/gtk-3.0" "$HOME/.config/gtk-4.0" \
          "$HOME/.config/qt6ct" "$HOME/.config/mpv" \
          "$HOME/.config/xdg-desktop-portal" \
          "$HOME/.config/dolphinrc.d" 2>/dev/null || true
+if [ "$WM" = "labwc" ]; then
+    mkdir -p "$HOME/.config/labwc" 2>/dev/null || true
+else
+    mkdir -p "$HOME/.config/mango/cfg" 2>/dev/null || true
+fi
 
 backup() {   # backup <target-file>
     if [ -e "$1" ]; then
@@ -145,7 +222,8 @@ backup() {   # backup <target-file>
     fi
 }
 
-# ---------------- labwc ----------------
+# ---------------- labwc (only when WM=labwc) ----------------
+if [ "$WM" = "labwc" ]; then
 # environment: keyboard layout, cursor theme/size, and the seat/portal env that
 # labwc passes to every client. XKB layout mirrors the mangowm setup (latam).
 backup "$HOME/.config/labwc/environment"
@@ -327,6 +405,327 @@ cat > "$HOME/.config/labwc/menu.xml" <<'LABWC_MENU'
 </menu>
 </openbox_menu>
 LABWC_MENU
+fi   # end labwc configs
+
+# ---------------- mango (only when WM=mango) ----------------
+if [ "$WM" = "mango" ]; then
+backup "$HOME/.config/mango/config.conf"
+cat > "$HOME/.config/mango/config.conf" <<'MANGO_ROOT'
+source = ./cfg/monitors.conf
+source = ./cfg/keybinds.conf
+source = ./cfg/input.conf
+source = ./cfg/autostart.conf
+source = ./cfg/env.conf
+source = ./cfg/appearance.conf
+source = ./cfg/layout.conf
+source = ./cfg/misc.conf
+source = ./cfg/rules.conf
+MANGO_ROOT
+
+backup "$HOME/.config/mango/cfg/monitors.conf"
+cat > "$HOME/.config/mango/cfg/monitors.conf" <<'MANGO_MONITORS'
+# | Outputs Configuration |
+# Configure your monitors here or in the DMS "Displays" settings. | https://mangowm.github.io/docs/configuration/monitors
+# Run `wlr-randr` to get your monitors information.
+# You will have to remove "#" and edit it for it to take effect.
+
+# monitorrule = name:DP-1, width:2560, height:1440, refresh:179.999, x:0, y:0, rr:0, vrr:1
+MANGO_MONITORS
+
+backup "$HOME/.config/mango/cfg/keybinds.conf"
+cat > "$HOME/.config/mango/cfg/keybinds.conf" <<'MANGO_KEYBINDS'
+# | Keybinds |
+# Configure your keybinds here. | https://mangowm.github.io/docs/bindings/keys
+
+# Your favorite applications.
+bind = SUPER, t, spawn, foot
+bind = SUPER, e, spawn, dolphin
+bind = SUPER, b, spawn, chromium
+
+# Wine killer
+bind = CTRL+ALT, q, spawn, wineserver -k
+
+# Please choose the text editor of your choice.
+# bind = SUPER, x, spawn, zed
+
+bind = SUPER, q, killclient,
+
+# Noctalia specific keybinds.
+bind = SUPER, space, spawn, noctalia msg panel-toggle launcher
+bind = SUPER, s, spawn, noctalia msg panel-toggle control-center
+bind = SUPER+SHIFT, s, spawn, noctalia msg settings-toggle
+bind = SUPER, w, spawn, noctalia msg panel-toggle noctalia/wallhaven:browser
+bind = SUPER, c, spawn, noctalia msg panel-toggle clipboard
+bind = SUPER+SHIFT, q, spawn, noctalia msg panel-toggle session
+
+# Screenshots
+bind = SUPER, p, spawn, noctalia msg screenshot-region
+bind = SUPER+SHIFT, p, spawn, noctalia msg screenshot-fullscreen
+bind = SUPER+ALT, p, spawn, noctalia msg screenshot-fullscreen all
+
+# Reload config
+bind = SUPER, r, reload_config
+
+# Audio controls
+bind = NONE, XF86AudioRaiseVolume, spawn, noctalia msg volume-up
+bind = NONE, XF86AudioLowerVolume, spawn, noctalia msg volume-down
+bind = NONE, XF86AudioMute, spawn, noctalia msg volume-mute
+
+# Brightness controls
+bind = NONE, XF86MonBrightnessUp, spawn, noctalia msg brightness-up
+bind = NONE, XF86MonBrightnessDown, spawn, noctalia msg brightness-down
+
+# Switch window focus
+bind = SUPER, Tab, focusstack, next
+bind = SUPER, Left, focusdir, left
+bind = SUPER, Right, focusdir, right
+bind = SUPER, Up, focusdir, up
+bind = SUPER, Down, focusdir, down
+
+# Swap window
+bind = SUPER+SHIFT, Up, exchange_client, up
+bind = SUPER+SHIFT, Down, exchange_client, down
+bind = SUPER+SHIFT, Left, exchange_client, left
+bind = SUPER+SHIFT, Right, exchange_client, right
+
+# Switch window status
+bind = SUPER, g, toggleglobal,
+bind = ALT, Tab, toggleoverview,
+bind = SUPER, v, togglefloating,
+bind = SUPER, f, togglemaximizescreen,
+bind = SUPER+SHIFT, f, togglefullscreen,
+bind = SUPER+ALT, f, togglefakefullscreen,
+bind = SUPER, i, minimized,
+bind = SUPER, o, toggleoverlay,
+bind = SUPER+SHIFT, I, restore_minimized
+bind = SUPER, z, toggle_scratchpad
+
+# Scroller layout
+bind = SUPER+SHIFT, e, set_proportion, 1.0
+bind = SUPER, x, switch_proportion_preset,
+
+# Switch layout
+bind = SUPER, n, switch_layout
+
+# Switch between workspaces
+bind = SUPER, 1, view, 1, 0
+bind = SUPER, 2, view, 2, 0
+bind = SUPER, 3, view, 3, 0
+bind = SUPER, 4, view, 4, 0
+bind = SUPER, 5, view, 5, 0
+bind = SUPER, 6, view, 6, 0
+bind = SUPER, 7, view, 7, 0
+bind = SUPER, 8, view, 8, 0
+bind = SUPER, 9, view, 9, 0
+
+# Tag: move client to another workspace.
+# Tagsilent: move client to another workspace but do not focus it.
+# E.g bind = SUPER+SHIFT, 1, tagsilent, 1
+bind = SUPER+SHIFT ,1, tag, 1, 0
+bind = SUPER+SHIFT, 2, tag, 2, 0
+bind = SUPER+SHIFT, 3, tag, 3, 0
+bind = SUPER+SHIFT, 4, tag, 4, 0
+bind = SUPER+SHIFT, 5, tag, 5, 0
+bind = SUPER+SHIFT, 6, tag, 6, 0
+bind = SUPER+SHIFT, 7, tag, 7, 0
+bind = SUPER+SHIFT, 8, tag, 8, 0
+bind = SUPER+SHIFT, 9, tag, 9, 0
+
+# Switch between monitors
+bind = SUPER+ALT, Left, focusmon, left
+bind = SUPER+ALT, Right, focusmon, right
+# Move window to another monitor
+bind = SUPER+ALT, Left, tagmon, left
+bind = SUPER+ALT, Right, tagmon, right
+
+# Gaps
+bind = SUPER+SHIFT, X, incgaps, 1
+bind = SUPER+SHIFT, Z, incgaps, -1
+bind = SUPER+SHIFT, R, togglegaps
+
+# Movewin
+bind = CTRL+SHIFT, Up, movewin, +0, -50
+bind = CTRL+SHIFT, Down, movewin, +0, +50
+bind = CTRL+SHIFT, Left, movewin, -50,+0
+bind = CTRL+SHIFT, Right, movewin, +50,+0
+
+# Resizewin
+bind = CTRL+ALT, Up, resizewin, +0, -50
+bind = CTRL+ALT, Down, resizewin, +0, +50
+bind = CTRL+ALT, Left, resizewin, -50, +0
+bind = CTRL+ALT, Right, resizewin, +50, +0
+
+# Mouse Button Bindings.
+# btn_left and btn_right can't bind none mod key
+mousebind = SUPER, btn_left, moveresize,curmove
+mousebind = NONE, btn_middle, togglemaximizescreen, 0
+mousebind = SUPER, btn_right, moveresize, curresize
+MANGO_KEYBINDS
+
+backup "$HOME/.config/mango/cfg/input.conf"
+cat > "$HOME/.config/mango/cfg/input.conf" <<'MANGO_INPUT'
+# | Input Devices |
+# Configure your input devices here. | https://mangowm.github.io/docs/configuration/input
+
+xkb_rules_layout = latam
+
+# If you want to disable pointer acceleration, uncomment the lines below.
+# accel_profile = 1
+# accel_speed = 0.2
+MANGO_INPUT
+
+backup "$HOME/.config/mango/cfg/autostart.conf"
+cat > "$HOME/.config/mango/cfg/autostart.conf" <<'MANGO_AUTOSTART'
+# | Auto Start |
+# autostart your favorite applications here
+
+exec-once = noctalia &
+MANGO_AUTOSTART
+
+backup "$HOME/.config/mango/cfg/env.conf"
+cat > "$HOME/.config/mango/cfg/env.conf" <<'MANGO_ENV'
+# | Environment Variables |
+# Set your environment variables here. | https://mangowm.github.io/docs/configuration/basics#environment-variables
+
+env = TERMINAL,foot
+# QT_QPA_PLATFORMTHEME deliberately NOT set (commented, exactly like the source
+# box): shell-spawned and D-Bus/systemd-activated apps (e.g. dolphin --daemon
+# via FileManager1) then share the same Qt env and get identical styling from
+# kdeglobals' ColorScheme=Noctalia instead of splitting on QPA theme.
+# env = QT_QPA_PLATFORMTHEME,qt6ct
+# env = QT_QPA_PLATFORMTHEME_QT6,qt6ct
+MANGO_ENV
+
+backup "$HOME/.config/mango/cfg/appearance.conf"
+cat > "$HOME/.config/mango/cfg/appearance.conf" <<'MANGO_APPEARANCE'
+# | Look & Feel |
+# theming | https://mangowm.github.io/docs/visuals
+
+gappih = 1
+gappiv = 1
+gappoh = 1
+gappov = 1
+borderpx = 2
+border_radius = 10
+
+scratchpad_width_ratio = 0.8
+scratchpad_height_ratio = 0.9
+
+rootcolor = 0x201b14ff
+bordercolor = 0x444444ff
+focuscolor = 0x47add6ff
+maximizescreencolor = 0x47add6ff
+urgentcolor = 0xad401fff
+scratchpadcolor = 0x516c93ff
+globalcolor = 0xb153a7ff
+overlaycolor = 0x14a57cff
+
+cursor_theme = capitaine-cursors
+cursor_size = 24
+
+blur = 1
+blur_layer = 0
+blur_optimized = 1
+blur_params_num_passes = 2
+blur_params_radius = 4
+blur_params_noise = 0.04
+blur_params_brightness = 0.9
+blur_params_contrast = 0.9
+blur_params_saturation = 1.2
+
+shadows = 1
+layer_shadows = 0
+shadow_only_floating = 0
+shadows_size = 4
+shadows_blur = 5
+shadows_position_x = 0
+shadows_position_y = 0
+shadowscolor = 0x000000ff
+
+animations = 1
+layer_animations = 1
+animation_type_open = zoom
+animation_type_close = zoom
+animation_fade_in = 1
+animation_fade_out = 1
+tag_animation_direction = 1
+zoom_initial_ratio = 0.1
+zoom_end_ratio = 0.5
+fadein_begin_opacity = 0.3
+fadeout_begin_opacity = 0.2
+animation_duration_move = 300
+animation_duration_open = 100
+animation_duration_tag = 300
+animation_duration_close = 400
+animation_duration_focus = 0
+animation_curve_open = 0.87, 0, 0.13, 1
+animation_curve_move = 0.46, 1.0, 0.29, 1
+animation_curve_tag = 0.46, 1.0, 0.29, 1
+animation_curve_close = 0.87, 0, 0.13, 1
+animation_curve_focus = 0.46, 1.0, 0.29, 1
+animation_curve_opafadeout = 0.5, 0.5, 0.5, 0.5
+animation_curve_opafadein = 0.46, 1.0, 0.29, 1
+MANGO_APPEARANCE
+
+backup "$HOME/.config/mango/cfg/layout.conf"
+cat > "$HOME/.config/mango/cfg/layout.conf" <<'MANGO_LAYOUT'
+# | Layout |
+# layouts | https://mangowm.github.io/docs/window-management/layouts
+
+# Change your layout here for each workspace.
+# tile, scroller, grid, deck, monocle, center_tile, vertical_tile, right_tile, vertical_scroller, dwindle, fair, vertical_fair, vertical_grid, vertical_deck
+tagrule = id:1, layout_name:dwindle
+tagrule = id:2, layout_name:dwindle
+tagrule = id:3, layout_name:dwindle
+tagrule = id:4, layout_name:dwindle
+tagrule = id:5, layout_name:dwindle
+tagrule = id:6, layout_name:dwindle
+tagrule = id:7, layout_name:dwindle
+tagrule = id:8, layout_name:dwindle
+tagrule = id:9, layout_name:dwindle
+
+# Scrolling layout settings
+scroller_structs = 40
+scroller_default_proportion = 0.5
+scroller_focus_center = 0
+scroller_prefer_center = 0
+scroller_prefer_overspread = 1
+edge_scroller_pointer_focus = 1
+scroller_default_proportion_single = 2.0
+scroller_proportion_preset = 0.5, 0.8, 1.0
+
+# Master-Stack layout settings
+new_is_master = 1
+default_mfact = 0.65
+default_nmaster = 1
+smartgaps = 0
+MANGO_LAYOUT
+
+backup "$HOME/.config/mango/cfg/misc.conf"
+cat > "$HOME/.config/mango/cfg/misc.conf" <<'MANGO_MISC'
+# | Miscellaneous |
+# https://mangowm.github.io/docs/configuration/miscellaneous
+
+allow_tearing = 2
+syncobj_enable = 1
+# xwayland-persistence = 1
+
+drag_tile_to_tile = 1
+MANGO_MISC
+
+backup "$HOME/.config/mango/cfg/rules.conf"
+cat > "$HOME/.config/mango/cfg/rules.conf" <<'MANGO_RULES'
+# | Rules |
+# Window/Tag/Layer rules. | https://mangowm.github.io/docs/window-management/rules
+
+windowrule = isfloating:1, appid:[Ss]team
+windowrule = isfloating:0, title:Steam
+windowrule = isfloating:1, appid:steam, title:Steam Settings
+
+layerrule = noanim:1, noblur:1, layer_name:selection
+MANGO_RULES
+
+fi   # end mango configs
 
 # ---------------- noctalia ----------------
 backup "$HOME/.config/noctalia/config.toml"
@@ -374,13 +773,13 @@ pinned = [ "chromium" ]
 smart_auto_hide = true
 
 [wallpaper.default]
-path = "/home/salva/Pictures/wallhaven-zp9lgw.jpg"
+path = "/usr/share/noctalia/assets/noctalia-wallpaper.png"
 
 [wallpaper.last]
-path = "/home/salva/Pictures/wallhaven-zp9lgw.jpg"
+path = "/usr/share/noctalia/assets/noctalia-wallpaper.png"
 
 [wallpaper.monitors.HDMI-A-2]
-path = "/home/salva/Pictures/wallhaven-zp9lgw.jpg"
+path = "/usr/share/noctalia/assets/noctalia-wallpaper.png"
 
 [idle]
 behavior_order = [ "lock", "screen-off", "lock-and-suspend" ]
@@ -740,10 +1139,11 @@ DOLPHIN
 say "Removing the Dolphin 'Set Folder Icon' context-menu plugin"
 sudo rm -f "$(command -v dolphin 2>/dev/null >/dev/null && find /usr/lib -name setfoldericonitemaction.so 2>/dev/null | head -1)"
 
-# labwc ships its own portal backend config for ScreenCast/Screenshot; write a
-# user override that also routes Secret/Inhibit the same way as before.
-backup "$HOME/.config/xdg-desktop-portal/labwc-portals.conf"
-cat > "$HOME/.config/xdg-desktop-portal/labwc-portals.conf" <<'PORTALS'
+# Write a user portal-backend override that routes ScreenCast/Screenshot to the
+# wlr portal and disables Secret/Inhibit, named for the selected WM.
+PORTALS_FILE="$HOME/.config/xdg-desktop-portal/${WM}-portals.conf"
+backup "$PORTALS_FILE"
+cat > "$PORTALS_FILE" <<'PORTALS'
 [preferred]
 default=gtk
 org.freedesktop.impl.portal.ScreenCast=wlr
@@ -773,9 +1173,9 @@ else
     # the real path so greetd can exec it (hardcoding the package name broke the
     # first-run boot with "greetd-agreety not found").
     GREETER_BIN="$(command -v agreety || command -v greetd-agreety || echo agreety)"
-    GREETER_CMD="$GREETER_BIN --cmd /usr/bin/labwc"
+    GREETER_CMD="$GREETER_BIN --cmd $WM_SESSION_BIN"
     GREETER_USER="greeter"
-    say "   greeter: $GREETER_BIN (noctalia-greeter not in your repos)"
+    say "   greeter: $GREETER_BIN (noctalia-greeter not in your repos) — launching $WM_SESSION_BIN"
 fi
 
 sudo install -d /etc/greetd
@@ -788,8 +1188,8 @@ command = "$GREETER_CMD"
 user = "$GREETER_USER"
 GREETD_TMPL
 
-# seatd: labwc (a wlroots compositor) needs compositor seat access; enable it
-# and add the user + greeter to the seat group.
+# seatd: the selected WM (a wlroots compositor) needs compositor seat access;
+# enable it and add the user + greeter to the seat group.
 sudo systemctl enable --now seatd
 sudo usermod -aG seat "$USER"
 sudo usermod -aG seat greeter 2>/dev/null || true
@@ -830,6 +1230,8 @@ sudo ufw enable
 # Done
 # ------------------------------------------------------------------------------
 say "Setup complete"
+
+if [ "$WM" = "labwc" ]; then
 cat <<EOF
 
   Reboot. greetd (with the Noctalia greeter when available, otherwise the
@@ -846,3 +1248,20 @@ cat <<EOF
     - Edit the window manager with: ~/.config/labwc/rc.xml  (reload: labwc --reconfigure)
     - Your old copies of everything lived in: $HOME_BAK
 EOF
+else
+cat <<EOF
+
+  Reboot. greetd (with the Noctalia greeter when available, otherwise the
+  plain greetd-agreety) will present the login screen, then start mango.
+
+  First-run notes:
+    - On the first login Noctalia fetches the plugins from git (needs network)
+      and generates the foot/gtk/qt themes (builtin_ids).
+    - SUPER+w opens the wallhaven plugin to grab a wallpaper once plugins load.
+    - SUPER+r reloads the mangowm config after editing files in
+      ~/.config/mango/cfg/ and ~/.config/noctalia/config.toml.
+    - Validate noctalia config any time with:  noctalia config validate
+    - Your old copies of everything lived in: $HOME_BAK
+    - AUR was used only for: ${AUR_PACKAGES[*]}
+EOF
+fi
