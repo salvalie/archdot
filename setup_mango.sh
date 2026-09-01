@@ -10,7 +10,7 @@ HOME_BAK="$HOME/.dotarch-backup-$(date +%Y%m%d%H%M%S)"
 # ------------------------------------------------------------------------------
 PACKAGES=(
     # -- desktop / wm (official) ---------------------------------------------
-    breeze noctalia foot sddm sddm-kcm qt5-declarative
+    breeze noctalia foot greetd greetd-agreety seatd
 
     # -- gpu: intel (change/comment for amd/nvidia) ----------------------------
     mesa vulkan-intel intel-media-driver libva-utils intel-ucode xorg-xwayland
@@ -42,16 +42,15 @@ PACKAGES=(
 
     # -- power / system tools -----------------------------------------------------
     power-profiles-daemon upower git rsync wget ripgrep unzip unrar p7zip zip
-    bash-completion pacman-contrib reflector openssh polkit-kde-agent uwf
+    bash-completion pacman-contrib reflector openssh polkit-kde-agent ufw
 )
 
 # AUR-only: mangowm + its build deps (wlroots0.20 provider + scenefx0.5),
-# and the simply-black login theme (archlinux-themes-sddm is AUR-only).
+# and noctalia-greeter (built from AUR on vanilla Arch where it is not packaged).
 AUR_PACKAGES=(
     wlroots0.20-hidpi-xprop   # libwlroots-0.20.so (AUR-only build dep of mangowm-git)
     scenefx0.5                # scenefx 0.5 (AUR-only build dep of mangowm-git)
     mangowm-git               # the WM itself (rolling/development build)
-    archlinux-themes-sddm     # archlinux-simplyblack + archlinux-soft-grey sddm themes
     mpv-mpris                 # MPRIS bridge so mangowm sees mpv as a media player
 )
 
@@ -112,10 +111,39 @@ say "Installing packages from official repos"
 sudo pacman -S --noconfirm --needed "${PACKAGES[@]}"
 
 # ------------------------------------------------------------------------------
-# AUR: mangowm-git + simply-black sddm theme
+# AUR: mangowm-git
 # ------------------------------------------------------------------------------
-say "Installing mangowm-git and the sddm theme from AUR"
+say "Installing mangowm-git from AUR"
 yay -S --noconfirm --needed "${AUR_PACKAGES[@]}"
+
+# ------------------------------------------------------------------------------
+# Greeter: noctalia-greeter (official on CachyOS, AUR on vanilla Arch)
+# ------------------------------------------------------------------------------
+# Try the packaged greeter first. On a CachyOS install with the cachyos repo
+# enabled this resolves straight from pacman. On vanilla Arch it is missing, so
+# we build it from the AUR (needs base-devel + git + an AUR helper such as yay).
+# Only if both paths fail do we fall back to the official greetd-agreety greeter.
+GREETER_SESSION=""
+if command -v noctalia-greeter-session >/dev/null 2>&1; then
+    GREETER_SESSION="$(command -v noctalia-greeter-session)"
+elif sudo pacman -S --noconfirm --needed noctalia-greeter >/dev/null 2>&1 \
+     && command -v noctalia-greeter-session >/dev/null 2>&1; then
+    GREETER_SESSION="$(command -v noctalia-greeter-session)"
+else
+    say "noctalia-greeter not in your repos — installing from the AUR"
+    sudo pacman -S --noconfirm --needed base-devel git
+    if ! command -v yay >/dev/null 2>&1; then
+        rm -rf /tmp/yay-build; mkdir -p /tmp/yay-build
+        git clone --depth 1 https://aur.archlinux.org/yay-bin.git /tmp/yay-build/yay-bin >/dev/null 2>&1 \
+            && cd /tmp/yay-build/yay-bin && makepkg -si --noconfirm >/dev/null 2>&1
+        cd /
+    fi
+    if command -v yay >/dev/null 2>&1; then
+        yay -S --noconfirm --needed noctalia-greeter >/dev/null 2>&1 \
+            && command -v noctalia-greeter-session >/dev/null 2>&1 \
+            && GREETER_SESSION="$(command -v noctalia-greeter-session)"
+    fi
+fi
 
 # ------------------------------------------------------------------------------
 # Configs (with backups of whatever already exists)
@@ -457,17 +485,17 @@ backup "$HOME/.config/noctalia/config.toml"
 cat > "$HOME/.config/noctalia/config.toml" <<'NOCTALIA'
 [bar.default]
 background_opacity = 0.89999997988343239
-center = [ "workspaces", "Spacer_2", "cat" ]
+center = [ "workspaces", "Spacer_2", "settings" ]
 end = [
     "tray",
     "Spacer_2",
+    "disks",
     "udiskie",
     "temp",
     "wdisplays",
     "spacer",
     "notifications",
     "clipboard",
-    "recorder",
     "Spacer_2",
     "network",
     "bluetooth",
@@ -483,15 +511,28 @@ end = [
 ]
 margin_edge = 0
 margin_ends = 0
+position = "bottom"
 radius_bottom_left = 0
 radius_bottom_right = 0
 radius_top_left = 0
 radius_top_right = 0
-start = [ "Spacer", "launcher", "Spacer_2", "active_window" ]
+start = [ "Spacer", "launcher", "Spacer_2", "taskbar" ]
 thickness = 40
 
+[dock]
+icon_size = 32
+main_axis_padding = 7
+pinned = [ "chromium" ]
+smart_auto_hide = true
+
 [wallpaper.default]
-path = "/usr/share/wallpapers/cachyos-wallpapers/cachysurf4.jpg"
+path = "/home/salva/Pictures/wallhaven-zp9lgw.jpg"
+
+[wallpaper.last]
+path = "/home/salva/Pictures/wallhaven-zp9lgw.jpg"
+
+[wallpaper.monitors.HDMI-A-2]
+path = "/home/salva/Pictures/wallhaven-zp9lgw.jpg"
 
 [idle]
 behavior_order = [ "lock", "screen-off", "lock-and-suspend" ]
@@ -500,6 +541,8 @@ behavior_order = [ "lock", "screen-off", "lock-and-suspend" ]
     action = "command"
     enabled = true
     timeout = 300.0
+    command = "wlopm --off DP-1"
+    resume_command = "wlopm --on DP-1"
 
     [idle.behavior.lock]
     action = "lock"
@@ -512,10 +555,13 @@ behavior_order = [ "lock", "screen-off", "lock-and-suspend" ]
     lock_before_suspend = false
     timeout = 900.0
 
+[osd]
+background_opacity = 0.99999997764825821
+
 [lockscreen_widgets]
 enabled = false
 schema_version = 2
-widget_order = [ "lockscreen-login-box@DP-2", "lockscreen-login-box@DP-1" ]
+widget_order = [ "lockscreen-login-box@HDMI-A-2", "lockscreen-login-box@DP-2", "lockscreen-login-box@DP-1" ]
 
     [lockscreen_widgets.grid]
     cell_size = 16
@@ -523,11 +569,13 @@ widget_order = [ "lockscreen-login-box@DP-2", "lockscreen-login-box@DP-1" ]
     visible = true
 
     [lockscreen_widgets.widget."lockscreen-login-box@DP-1"]
-    box_height = 70.0
-    box_width = 400.0
+    box_height = 196.0
+    box_width = 720.0
     cx = 1280.0
     cy = 1321.0
     output = "DP-1"
+    placement_height = 0.0
+    placement_width = 0.0
     rotation = 0.0
     type = "login_box"
 
@@ -535,18 +583,26 @@ widget_order = [ "lockscreen-login-box@DP-2", "lockscreen-login-box@DP-1" ]
         background_color = "surface_variant"
         background_opacity = 0.88
         background_radius = 12.0
+        center_password_text = false
         input_opacity = 1.0
         input_radius = 6.0
+        layout = "regular"
         show_caps_lock = true
         show_keyboard_layout = true
         show_login_button = true
+        show_media = true
+        show_session_buttons = true
+        show_unlock_hint = true
+        show_weather = true
 
     [lockscreen_widgets.widget."lockscreen-login-box@DP-2"]
-    box_height = 70.0
-    box_width = 400.0
+    box_height = 196.0
+    box_width = 720.0
     cx = 1280.0
     cy = 1321.0
     output = "DP-2"
+    placement_height = 0.0
+    placement_width = 0.0
     rotation = 0.0
     type = "login_box"
 
@@ -554,17 +610,50 @@ widget_order = [ "lockscreen-login-box@DP-2", "lockscreen-login-box@DP-1" ]
         background_color = "surface_variant"
         background_opacity = 0.88
         background_radius = 12.0
+        center_password_text = false
         input_opacity = 1.0
         input_radius = 6.0
+        layout = "regular"
         show_caps_lock = true
         show_keyboard_layout = true
         show_login_button = true
+        show_media = true
+        show_session_buttons = true
+        show_unlock_hint = true
+        show_weather = true
+
+    [lockscreen_widgets.widget."lockscreen-login-box@HDMI-A-2"]
+    box_height = 196.0
+    box_width = 810.0
+    cx = 960.0
+    cy = 898.0
+    output = "HDMI-A-2"
+    placement_height = 1080.0
+    placement_width = 1920.0
+    rotation = 0.0
+    type = "login_box"
+
+        [lockscreen_widgets.widget."lockscreen-login-box@HDMI-A-2".settings]
+        background_color = "surface_variant"
+        background_opacity = 0.88
+        background_radius = 12.0
+        center_password_text = false
+        input_opacity = 1.0
+        input_radius = 6.0
+        layout = "regular"
+        show_caps_lock = true
+        show_keyboard_layout = true
+        show_login_button = true
+        show_media = true
+        show_session_buttons = true
+        show_unlock_hint = true
+        show_weather = true
 
 [plugin_settings."noctalia/screen_recorder"]
 restore_portal = false
 
 [plugins]
-enabled = [ "noctalia/screen_recorder", "dotnetrob/cat", "noctalia/wallhaven" ]
+enabled = [ "noctalia/screen_recorder", "dotnetrob/cat", "noctalia/wallhaven", "aristides/udiskie" ]
 
     [[plugins.source]]
     kind = "git"
@@ -580,13 +669,27 @@ enabled = [ "noctalia/screen_recorder", "dotnetrob/cat", "noctalia/wallhaven" ]
 polkit_agent = true
 settings_show_advanced = true
 
+[shell.keyboard_layout.custom_labels]
+"Spanish (Latin American)" = "es"
+
+[shell.launcher]
+pinned = [
+    "chromium",
+    "foot",
+    "org.gnome.DiskUtility",
+    "org.kde.dolphin",
+    "network.cycles.wdisplays",
+    "btop",
+    "org.qbittorrent.qBittorrent"
+]
+
 [theme]
 builtin = "Noctalia"
-mode = "dark"
+mode = "light"
 source = "wallpaper"
 
     [theme.templates]
-    builtin_ids = [ "gtk3", "gtk4", "kcolorscheme", "qt" ]
+    builtin_ids = [ "btop", "foot", "gtk3", "gtk4", "kcolorscheme", "qt" ]
 
 [widget.temp]
 type = "sysmon"
@@ -607,7 +710,7 @@ type = "dotnetrob/cat:cat"
 format = "{:%a %d %b -}"
 
 [widget.launcher]
-custom_image = "/usr/share/icons/hicolor/scalable/apps/org.cachyos.hello.svg"
+custom_image = "$HOME/.local/share/icons/arch-round.svg"
 scale = 1.45
 
 [widget.network]
@@ -633,7 +736,38 @@ glyph = "device-usb"
 
 [widget.udiskie.actions]
 left = "exec noctalia msg panel-toggle aristides/udiskie:manager"
+
+[widget.active_window]
+display = "icon_only"
+icon_size = 18
+
+[widget.disks]
+type = "custom_button"
+glyph = "air-conditioning-disabled"
+
+[widget.disks.actions]
+left = "exec gnome-disks"
+
+[widget.taskbar]
+capsule = true
+capsule_fill = "on_secondary"
+capsule_opacity = 0.79000000000000004
+icon_scale = 1.2000000000000002
+item_spacing = 9
+show_window_title = false
+window_title_max_width = 180
+show_active_indicator = true
+active_indicator_color = "primary"
+active_opacity = 1.0
+inactive_opacity = 0.75
+show_all_outputs = true
+group_by_workspace = false
 NOCTALIA
+
+# noctalia reads custom_image as a literal path and does NOT expand $HOME, so
+# substitute the real absolute home path (the heredoc above is quoted on purpose
+# to keep the rest of the config literal).
+sed -i "s|\\\$HOME|$HOME|g" "$HOME/.config/noctalia/config.toml"
 
 # ---------------- gtk / qt6ct / kde / dolphin / foot / portals ----------------
 # foot.ini: Noctalia's "foot" template still owns the colors (it only touches
@@ -735,7 +869,7 @@ cat > "$HOME/.config/kdeglobals" <<'KDEGLOBALS'
 Theme=breeze-dark
 
 [General]
-ColorScheme=Noctalia
+ColorScheme=noctalia
 TerminalApplication=foot
 UseSystemBell=true
 
@@ -772,20 +906,51 @@ org.freedesktop.impl.portal.Inhibit=none
 PORTALS
 
 # ------------------------------------------------------------------------------
-# SDDM + archlinux-simplyblack theme (via AUR archlinux-themes-sddm)
+# greetd (+ noctalia-greeter or agreety fallback)
 # ------------------------------------------------------------------------------
-# The simply-black theme ships only on AUR (archlinux-themes-sddm), which
-# installs archlinux-simplyblack + archlinux-soft-grey to /usr/share/sddm/themes.
-# qt5-declarative (installed above) provides the QtQuick runtime, since the
-# current sddm is Qt6-based while the theme is a Qt5 QML theme.
-say "Enabling the archlinux-simplyblack sddm theme"
-[ -d /usr/share/sddm/themes/archlinux-simplyblack ] \
-    || die "archlinux-simplyblack not found after AUR install"
-sudo install -d /etc/sddm.conf.d
-sudo tee /etc/sddm.conf.d/theme.conf >/dev/null <<'SDDM_THEME'
-[Theme]
-Current=archlinux-simplyblack
-SDDM_THEME
+say "Configuring greetd as the login manager"
+
+# Provide a dedicated greeter account for graphical greetd greeters (noctalia
+# greeter expects one); create it silently if missing.
+if ! id greeter >/dev/null 2>&1; then
+    sudo useradd --system --shell /usr/sbin/nologin \
+        --comment "greetd greeter user" --create-home greeter 2>/dev/null || true
+fi
+
+if [ -n "$GREETER_SESSION" ]; then
+    GREETER_CMD="$GREETER_SESSION"
+    GREETER_USER="greeter"
+    say "   greeter: $GREETER_SESSION (noctalia-greeter)"
+else
+    # Arch's greetd-agreety package ships the binary as /usr/bin/agreety; resolve
+    # the real path so greetd can exec it (hardcoding the package name broke the
+    # first-run boot with "greetd-agreety not found").
+    GREETER_BIN="$(command -v agreety || command -v greetd-agreety || echo agreety)"
+    GREETER_CMD="$GREETER_BIN --cmd /usr/bin/mango"
+    GREETER_USER="greeter"
+    say "   greeter: $GREETER_BIN (noctalia-greeter not in your repos)"
+fi
+
+sudo install -d /etc/greetd
+sudo tee /etc/greetd/config.toml >/dev/null <<GREETD_TMPL
+[terminal]
+vt = 1
+
+[default_session]
+command = "$GREETER_CMD"
+user = "$GREETER_USER"
+GREETD_TMPL
+
+# seatd: wlroots-based compositors need compositor seat access; enable it
+# and add the user + greeter to the seat group.
+sudo systemctl enable --now seatd
+sudo usermod -aG seat "$USER"
+sudo usermod -aG seat greeter 2>/dev/null || true
+
+# Disable any legacy display manager, enable greetd, and log in graphically.
+sudo systemctl disable sddm 2>/dev/null || true
+sudo systemctl enable greetd
+sudo systemctl set-default graphical.target
 
 # ------------------------------------------------------------------------------
 # Services
@@ -794,11 +959,9 @@ say "Enabling services"
 sys_enable NetworkManager bluetooth systemd-timesyncd power-profiles-daemon \
            avahi-daemon fstrim.timer
 
-# SDDM is the login manager — enable it last, just enable, do not start here.
-# Boot into graphical.target so SDDM actually greets us on the next start
+# SDDM is disabled (if present); greetd was already enabled above.
+# Boot into graphical.target so greetd greets us on the next start
 # (vanilla Arch defaults to multi-user.target = plain TTY login).
-sudo systemctl enable sddm
-sudo systemctl set-default graphical.target
 
 # User services (guarded: may have no session during a bare-metal setup).
 usr_enable pipewire.socket pipewire-pulse.socket wireplumber \
@@ -819,7 +982,8 @@ usr_enable pipewire.socket pipewire-pulse.socket wireplumber \
 say "Setup complete"
 cat <<EOF
 
-  Reboot and choose "Mango" (mangowm-git) from the SDDM session menu.
+  Reboot. greetd (with the Noctalia greeter when available, otherwise the
+  plain greetd-agreety) will present the login screen, then start Mango.
 
   First-run notes:
     - On the first login Noctalia fetches the plugins from git (needs network)

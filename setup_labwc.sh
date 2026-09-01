@@ -188,7 +188,7 @@ cat > "$HOME/.config/labwc/rc.xml" <<'LABWC_RC'
   <keyboard>
     <default />
 
-    <keybind key="W-Return">
+    <keybind key="W-t">
       <action name="Execute"><command>foot</command></action>
     </keybind>
     <keybind key="W-e">
@@ -333,17 +333,17 @@ backup "$HOME/.config/noctalia/config.toml"
 cat > "$HOME/.config/noctalia/config.toml" <<'NOCTALIA'
 [bar.default]
 background_opacity = 0.89999997988343239
-center = [ "workspaces", "Spacer_2", "cat" ]
+center = [ "workspaces", "Spacer_2", "settings" ]
 end = [
     "tray",
     "Spacer_2",
+    "disks",
     "udiskie",
     "temp",
     "wdisplays",
     "spacer",
     "notifications",
     "clipboard",
-    "recorder",
     "Spacer_2",
     "network",
     "bluetooth",
@@ -359,15 +359,28 @@ end = [
 ]
 margin_edge = 0
 margin_ends = 0
+position = "bottom"
 radius_bottom_left = 0
 radius_bottom_right = 0
 radius_top_left = 0
 radius_top_right = 0
-start = [ "Spacer", "launcher", "Spacer_2", "active_window" ]
+start = [ "Spacer", "launcher", "Spacer_2", "taskbar" ]
 thickness = 40
 
+[dock]
+icon_size = 32
+main_axis_padding = 7
+pinned = [ "chromium" ]
+smart_auto_hide = true
+
 [wallpaper.default]
-path = "/usr/share/wallpapers/cachyos-wallpapers/cachysurf4.jpg"
+path = "/home/salva/Pictures/wallhaven-zp9lgw.jpg"
+
+[wallpaper.last]
+path = "/home/salva/Pictures/wallhaven-zp9lgw.jpg"
+
+[wallpaper.monitors.HDMI-A-2]
+path = "/home/salva/Pictures/wallhaven-zp9lgw.jpg"
 
 [idle]
 behavior_order = [ "lock", "screen-off", "lock-and-suspend" ]
@@ -390,10 +403,13 @@ behavior_order = [ "lock", "screen-off", "lock-and-suspend" ]
     lock_before_suspend = false
     timeout = 900.0
 
+[osd]
+background_opacity = 0.99999997764825821
+
 [lockscreen_widgets]
 enabled = false
 schema_version = 2
-widget_order = [ "lockscreen-login-box@DP-2", "lockscreen-login-box@DP-1" ]
+widget_order = [ "lockscreen-login-box@HDMI-A-2", "lockscreen-login-box@DP-2", "lockscreen-login-box@DP-1" ]
 
     [lockscreen_widgets.grid]
     cell_size = 16
@@ -401,11 +417,13 @@ widget_order = [ "lockscreen-login-box@DP-2", "lockscreen-login-box@DP-1" ]
     visible = true
 
     [lockscreen_widgets.widget."lockscreen-login-box@DP-1"]
-    box_height = 70.0
-    box_width = 400.0
+    box_height = 196.0
+    box_width = 720.0
     cx = 1280.0
     cy = 1321.0
     output = "DP-1"
+    placement_height = 0.0
+    placement_width = 0.0
     rotation = 0.0
     type = "login_box"
 
@@ -413,18 +431,26 @@ widget_order = [ "lockscreen-login-box@DP-2", "lockscreen-login-box@DP-1" ]
         background_color = "surface_variant"
         background_opacity = 0.88
         background_radius = 12.0
+        center_password_text = false
         input_opacity = 1.0
         input_radius = 6.0
+        layout = "regular"
         show_caps_lock = true
         show_keyboard_layout = true
         show_login_button = true
+        show_media = true
+        show_session_buttons = true
+        show_unlock_hint = true
+        show_weather = true
 
     [lockscreen_widgets.widget."lockscreen-login-box@DP-2"]
-    box_height = 70.0
-    box_width = 400.0
+    box_height = 196.0
+    box_width = 720.0
     cx = 1280.0
     cy = 1321.0
     output = "DP-2"
+    placement_height = 0.0
+    placement_width = 0.0
     rotation = 0.0
     type = "login_box"
 
@@ -432,11 +458,44 @@ widget_order = [ "lockscreen-login-box@DP-2", "lockscreen-login-box@DP-1" ]
         background_color = "surface_variant"
         background_opacity = 0.88
         background_radius = 12.0
+        center_password_text = false
         input_opacity = 1.0
         input_radius = 6.0
+        layout = "regular"
         show_caps_lock = true
         show_keyboard_layout = true
         show_login_button = true
+        show_media = true
+        show_session_buttons = true
+        show_unlock_hint = true
+        show_weather = true
+
+    [lockscreen_widgets.widget."lockscreen-login-box@HDMI-A-2"]
+    box_height = 196.0
+    box_width = 810.0
+    cx = 960.0
+    cy = 898.0
+    output = "HDMI-A-2"
+    placement_height = 1080.0
+    placement_width = 1920.0
+    rotation = 0.0
+    type = "login_box"
+
+        [lockscreen_widgets.widget."lockscreen-login-box@HDMI-A-2".settings]
+        background_color = "surface_variant"
+        background_opacity = 0.88
+        background_radius = 12.0
+        center_password_text = false
+        input_opacity = 1.0
+        input_radius = 6.0
+        layout = "regular"
+        show_caps_lock = true
+        show_keyboard_layout = true
+        show_login_button = true
+        show_media = true
+        show_session_buttons = true
+        show_unlock_hint = true
+        show_weather = true
 
 [plugin_settings."noctalia/screen_recorder"]
 restore_portal = false
@@ -458,13 +517,27 @@ enabled = [ "noctalia/screen_recorder", "dotnetrob/cat", "noctalia/wallhaven", "
 polkit_agent = true
 settings_show_advanced = true
 
+[shell.keyboard_layout.custom_labels]
+"Spanish (Latin American)" = "es"
+
+[shell.launcher]
+pinned = [
+    "chromium",
+    "foot",
+    "org.gnome.DiskUtility",
+    "org.kde.dolphin",
+    "network.cycles.wdisplays",
+    "btop",
+    "org.qbittorrent.qBittorrent"
+]
+
 [theme]
 builtin = "Noctalia"
 mode = "light"
 source = "wallpaper"
 
     [theme.templates]
-    builtin_ids = [ "gtk3", "gtk4", "kcolorscheme", "qt", "foot" ]
+    builtin_ids = [ "btop", "foot", "gtk3", "gtk4", "kcolorscheme", "qt" ]
 
 [widget.temp]
 type = "sysmon"
@@ -511,6 +584,32 @@ glyph = "device-usb"
 
 [widget.udiskie.actions]
 left = "exec noctalia msg panel-toggle aristides/udiskie:manager"
+
+[widget.active_window]
+display = "icon_only"
+icon_size = 18
+
+[widget.disks]
+type = "custom_button"
+glyph = "air-conditioning-disabled"
+
+[widget.disks.actions]
+left = "exec gnome-disks"
+
+[widget.taskbar]
+capsule = true
+capsule_fill = "on_secondary"
+capsule_opacity = 0.79000000000000004
+icon_scale = 1.2000000000000002
+item_spacing = 9
+show_window_title = false
+window_title_max_width = 180
+show_active_indicator = true
+active_indicator_color = "primary"
+active_opacity = 1.0
+inactive_opacity = 0.75
+show_all_outputs = true
+group_by_workspace = false
 NOCTALIA
 
 # noctalia reads custom_image as a literal path and does NOT expand $HOME, so
@@ -609,7 +708,7 @@ cat > "$HOME/.config/kdeglobals" <<'KDEGLOBALS'
 Theme=breeze-dark
 
 [General]
-ColorScheme=Noctalia
+ColorScheme=noctalia
 TerminalApplication=foot
 UseSystemBell=true
 
