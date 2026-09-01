@@ -8,7 +8,8 @@ Objective
 
 Current Status
 - setup_noctalia.sh is the only script; old setup_labwc.sh/setup_mango.sh deleted (merged logic folded in; both WM config blocks verified identical to the originals, syntax OK, sandbox-run for both branches).
-- Re-testing now on the clean target: setup_noctalia.sh --mango (building mangowm from the AUR).
+- MANGO TEST PASSED end-to-end on the clean target: --mango branch ran headless to SCRIPT_EXIT=0; built yay + AUR (wlroots0.20-hidpi-xprop, scenefx0.5, mangowm-git) → /usr/bin/mango; greetd + seatd enabled, default graphical.target, /etc/greetd/config.toml correct; all 9 mango cfg files + config.conf present; noctalia config 6318 bytes (matches labwc baseline); noctalia config validate ✓ (3 cosmetic warnings).
+- Box currently booted into the mango-tested root (post-setup). Rollback.sh is in the repo and can return it to clean (round 3) when needed. Temp NOPASSWD sudoers removed.
 
 Important Details
 - Project: git repo /home/salva/dev/archdot
@@ -20,8 +21,9 @@ Important Details
 
 
 Next Move
-1. Retest setup_noctalia.sh on the rolled-back clean target with --mango (slower: builds mangowm from AUR) to confirm the mango branch works end-to-end; --labwc was validated via the sandbox run.
-2. Review and commit setup_noctalia.sh, rollback.sh and this README.
+1. Reboot the target and confirm greetd presents the noctalia login screen and mango starts on login (visual check).
+2. Optionally validate the --labwc branch on a rolled-back box as well.
+3. Review and commit the scripts/README when the user is ready.
 
 Usage
 - setup_noctalia.sh [--labwc | --mango]   (no flag → interactive prompt, default labwc)
