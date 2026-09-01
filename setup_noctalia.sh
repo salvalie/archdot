@@ -184,8 +184,15 @@ case "$GPU_VENDOR" in
         GPX_NOTE="NVIDIA: proprietary nvidia + nvidia-utils"
         ;;
     *)
-        GPGPU_PKGS=()
-        GPX_NOTE="unknown GPU — no vendor driver added (install manually if needed)"
+        # Unknown/failed detection: install FOSS (mesa) stacks for all three
+        # vendors plus every microcode, and assume MODERN hardware everywhere
+        # (intel-media-driver, not the legacy libva-intel-driver).
+        GPGPU_PKGS=(
+            intel-media-driver vulkan-intel intel-ucode
+            vulkan-radeon      libva-mesa-driver amd-ucode
+            nvidia-utils
+        )
+        GPX_NOTE="unknown GPU — installing all three FOSS stacks (intel/amd) + nvidia-utils, all microcodes"
         ;;
 esac
 PACKAGES+=( "${GPGPU_PKGS[@]}" )
