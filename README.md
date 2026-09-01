@@ -1,0 +1,1 @@
+These scripts are for personal use with the intention to build lightweight Desktop Enviroments on clean minimal/server arch linux instalations with Noxtalia shell and for now two different compositors, labwc and mango.

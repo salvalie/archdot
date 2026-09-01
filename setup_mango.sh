@@ -1,20 +1,4 @@
 #!/usr/bin/env bash
-# ==============================================================================
-# dotarch — setup for a vanilla Arch Linux (core+extra) install:
-#   Mangowm (mangowm-git, AUR), Noctalia v5, foot, SDDM (archlinux-simplyblack)
-#
-# Replacements applied vs the CachyOS Mango/Noctalia defaults:
-#   - no custom cachyos wallpapers/icons (can't exist here) -> solid color bg
-#   - alacritty -> foot everywhere (mango keybind, TERMINAL, kdeglobals, foot template)
-#   - adw-gtk-theme (official) provides the adw-gtk3 GTK theme name
-#
-# AUR is used only for mangowm-git (+ its AUR-only build prerequisites:
-# wlroots0.20 provider + scenefx0.5), and for the archlinux-simplyblack sddm
-# theme via archlinux-themes-sddm (the theme is not in the official repos).
-# Everything else comes from official repos.
-#
-# Usage:  ./setup.sh   (as your normal user; sudo is requested internally)
-# ==============================================================================
 
 set -euo pipefail
 
@@ -45,10 +29,12 @@ PACKAGES=(
     ttf-dejavu ttf-liberation cantarell-fonts
 
     # -- apps (normie + picks) ---------------------------------------------------
-    chromium dolphin dolphin-plugins ark ffmpegthumbnailer xdg-user-dirs
-    mpv zathura zathura-pdf-mupdf foliate imv micro btop fastfetch
-    gnome-disk-utility gnome-system-monitor qbittorrent gnome-keyring
-    # firefox
+    chromium dolphin kde-cli-tools dolphin-plugins ark ffmpegthumbnailer xdg-user-dirs
+    mpv udiskie zathura zathura-pdf-mupdf imv micro btop fastfetch
+    gnome-disk-utility qbittorrent htop glmark2
+
+    # -- disks / the noctalia udiskie plugin -------------------------------------
+    udisks2 udiskie xdg-utils
 
     # -- wayland / clipboard / portals ------------------------------------------
     wl-clipboard wlr-randr xdg-desktop-portal xdg-desktop-portal-wlr
@@ -56,7 +42,7 @@ PACKAGES=(
 
     # -- power / system tools -----------------------------------------------------
     power-profiles-daemon upower git rsync wget ripgrep unzip unrar p7zip zip
-    bash-completion pacman-contrib reflector openssh polkit-kde-agent
+    bash-completion pacman-contrib reflector openssh polkit-kde-agent uwf
 )
 
 # AUR-only: mangowm + its build deps (wlroots0.20 provider + scenefx0.5),
@@ -361,7 +347,7 @@ scratchpadcolor = 0x516c93ff
 globalcolor = 0xb153a7ff
 overlaycolor = 0x14a57cff
 
-cursor_theme = capitaine-cursors-light
+cursor_theme = capitaine-cursors
 cursor_size = 24
 
 blur = 1
@@ -471,10 +457,14 @@ backup "$HOME/.config/noctalia/config.toml"
 cat > "$HOME/.config/noctalia/config.toml" <<'NOCTALIA'
 [bar.default]
 background_opacity = 0.89999997988343239
-center = [ "workspaces", "Spacer_2", "media", "Spacer_2", "cat", "temp" ]
+center = [ "workspaces", "Spacer_2", "cat" ]
 end = [
     "tray",
     "Spacer_2",
+    "udiskie",
+    "temp",
+    "wdisplays",
+    "spacer",
     "notifications",
     "clipboard",
     "recorder",
@@ -500,10 +490,8 @@ radius_top_right = 0
 start = [ "Spacer", "launcher", "Spacer_2", "active_window" ]
 thickness = 40
 
-# Solid color for now (CachyOS wallpaper paths do not exist on plain Arch);
-# grab a real wallpaper later with the wallhaven plugin (SUPER+w).
 [wallpaper.default]
-path = "color:#201b14"
+path = "/usr/share/wallpapers/cachyos-wallpapers/cachysurf4.jpg"
 
 [idle]
 behavior_order = [ "lock", "screen-off", "lock-and-suspend" ]
@@ -594,11 +582,11 @@ settings_show_advanced = true
 
 [theme]
 builtin = "Noctalia"
-mode = "light"
+mode = "dark"
 source = "wallpaper"
 
     [theme.templates]
-    builtin_ids = [ "gtk3", "gtk4", "kcolorscheme", "qt", "foot" ]
+    builtin_ids = [ "gtk3", "gtk4", "kcolorscheme", "qt" ]
 
 [widget.temp]
 type = "sysmon"
@@ -618,11 +606,8 @@ type = "dotnetrob/cat:cat"
 [widget.date]
 format = "{:%a %d %b -}"
 
-# Launcher applet icon: bundled round arch logo (written to
-# ~/.local/share/icons/arch-round.svg by the gtk/qt6ct/kde section below;
-# Numix-Circle is no longer part of the icon stack).
 [widget.launcher]
-custom_image = "/home/salva/.local/share/icons/arch-round.svg"
+custom_image = "/usr/share/icons/hicolor/scalable/apps/org.cachyos.hello.svg"
 scale = 1.45
 
 [widget.network]
@@ -634,6 +619,20 @@ type = "noctalia/screen_recorder:recorder"
 [widget.workspaces]
 anchor = true
 show_labels = false
+
+[widget.wdisplays]
+type = "custom_button"
+glyph = "device-desktop"
+
+[widget.wdisplays.actions]
+left = "exec wdisplays"
+
+[widget.udiskie]
+type = "custom_button"
+glyph = "device-usb"
+
+[widget.udiskie.actions]
+left = "exec noctalia msg panel-toggle aristides/udiskie:manager"
 NOCTALIA
 
 # ---------------- gtk / qt6ct / kde / dolphin / foot / portals ----------------
@@ -644,7 +643,7 @@ backup "$HOME/.config/foot/foot.ini"
 cat > "$HOME/.config/foot/foot.ini" <<'FOOT'
 [main]
 include=~/.config/foot/themes/noctalia
-font=monospace:size=12
+font=MesloLGM Nerd Font Mono:size=12
 FOOT
 
 backup "$HOME/.config/gtk-3.0/settings.ini"
@@ -762,19 +761,13 @@ cat > "$HOME/.config/dolphinrc" <<'DOLPHIN'
 ColorScheme=Noctalia
 DOLPHIN
 
-# Drop Dolphin's "Set Folder Icon" (Definir icono de carpeta) context-menu
-# entry: with the plain hicolor icon set it opens a cluttered folder picker the
-# source box doesn't offer either; keep the menu lean.
-say "Removing the Dolphin 'Set Folder Icon' context-menu plugin"
-sudo rm -f "$(command -v dolphin 2>/dev/null >/dev/null && find /usr/lib -name setfoldericonitemaction.so 2>/dev/null | head -1)"
-
 backup "$HOME/.config/xdg-desktop-portal/mango-portals.conf"
 cat > "$HOME/.config/xdg-desktop-portal/mango-portals.conf" <<'PORTALS'
 [preferred]
 default=gtk
 org.freedesktop.impl.portal.ScreenCast=wlr
 org.freedesktop.impl.portal.Screenshot=wlr
-org.freedesktop.impl.portal.Secret=gnome-keyring
+org.freedesktop.impl.portal.Secret=none
 org.freedesktop.impl.portal.Inhibit=none
 PORTALS
 
@@ -809,7 +802,7 @@ sudo systemctl set-default graphical.target
 
 # User services (guarded: may have no session during a bare-metal setup).
 usr_enable pipewire.socket pipewire-pulse.socket wireplumber \
-           xdg-user-dirs.service gnome-keyring-daemon.socket
+           xdg-user-dirs.service
 
 # Optional (uncomment to switch DNS to systemd-resolved):
 # sudo pacman -S --noconfirm --needed systemd-resolvconf
