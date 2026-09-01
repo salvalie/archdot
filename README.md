@@ -12,6 +12,8 @@ Current Status
 - Platform/GPU auto-detection added (intel modern/legacy, amd, nvidia) + matching vendor packages & CPU microcode. Unknown GPU → installs FOSS stacks for all three vendors + all microcodes, assuming modern hw. Unit-tested for all vendors incl. the target (Intel N100/Alder Lake-N → intel + intel-media-driver).
 - MANGO TEST PASSED end-to-end on the clean target: --mango branch ran headless to SCRIPT_EXIT=0; built yay + AUR (wlroots0.20-hidpi-xprop, scenefx0.5, mangowm-git) → /usr/bin/mango; greetd + seatd enabled, default graphical.target, /etc/greetd/config.toml correct; all 9 mango cfg files + config.conf present; noctalia config 6318 bytes (matches labwc baseline); noctalia config validate ✓ (3 cosmetic warnings).
 - Target rolled back to clean (round 3) via rollback.sh; currently booted into the clean root. Next: labwc re-test with platform detection active.
+- LABWC TEST PASSED with platform detection on the clean target: --labwc branch ran headless to SCRIPT_EXIT=0; detection logged "Platform: intel — Intel (Broadwell+): using intel-media-driver"; instlaled intel-media-driver 26.2.4-1 + intel-ucode, NOT the legacy libva-intel-driver (modern path correct for the N100/Alder Lake-N). /usr/bin/labwc present, greetd+seatd enabled, graphical.target, noctalia config valid.
+- Unknown-GPU fallback added (committed) but not yet exercised on real hw (this box always detects intel).
 
 Important Details
 - Project: git repo /home/salva/dev/archdot
@@ -23,9 +25,8 @@ Important Details
 
 
 Next Move
-1. Reboot the target and confirm greetd presents the noctalia login screen and mango starts on login (visual check).
-2. Optionally validate the --labwc branch on a rolled-back box as well.
-3. Review and commit the scripts/README when the user is ready.
+1. Reboot the target and confirm greetd presents the noctalia login screen and labwc starts on login (visual check).
+2. Ready for further platform testing if desired.
 
 Usage
 - setup_noctalia.sh [--labwc | --mango]   (no flag → interactive prompt, default labwc)
